@@ -18,9 +18,88 @@ fn main() {
         None => String::from("--"),
     };
 
-    println!("Uptime : --");
-    println!("Storage : --");
-    println!("Memory : --");
-    println!("CPU/HDD Temperature: {} °C/--  ", temperature);
-    println!("Copyparty status: -- ");
+    let uptime: Option<String> = match fs::read_to_string("/proc/uptime") {
+        Ok(v) => Some(v),
+        Err(_e) => None,
+    };
+
+    let uptime: Option<String> = match uptime {
+        Some(v) => Some(v.split(" ").next().unwrap_or("--").to_string()),
+        None => None,
+    };
+
+    let uptime: Option<f64> = match uptime {
+        Some(v) => match v.parse::<f64>() {
+            Ok(n) => Some(n),
+            Err(_e) => None,
+        },
+        None => None,
+    };
+
+    let uptime_display = match uptime {
+        Some(v) => {
+            let days = v / (3600.0 * 24.0);
+            let remainder = v % (3600.0 * 24.0);
+            let hours = remainder / 3600.0;
+            let remainder = remainder % 3600.0;
+            let minutes = remainder / 60.0;
+            format!("{}d {}h {}m", days as u64, hours as u64, minutes as u64)
+        }
+        None => String::from("--"),
+    };
+
+    let load_avg: Option<String> = match fs::read_to_string("/proc/loadavg") {
+        Ok(v) => Some(v),
+        Err(_e) => None,
+    };
+    let load_display: String = match load_avg {
+        Some(v) => {
+            let mut fields = v.split(" ");
+            let one_min = fields.next().unwrap_or("--").to_string();
+            let five_min = fields.next().unwrap_or("--").to_string();
+            let fifteen_min = fields.next().unwrap_or("--").to_string();
+
+            format!("1m {} · 5m {} · 15m {}", one_min, five_min, fifteen_min)
+        }
+        None => String::from("--"),
+    };
+
+    let meminfo: Option<String> = match fs::read_to_string("/proc/meminfo") {
+        Ok(v) => Some(v),
+        Err(_e) => None,
+    };
+
+    let mem_display = match meminfo {
+        Some(v) => {
+            let mem_total = v
+                .lines()
+                .find(|line| line.starts_with("MemTotal:"))
+                .and_then(|line| line.split_whitespace().nth(1))
+                .and_then(|n| n.parse::<f64>().ok());
+
+            let mem_available = v
+                .lines()
+                .find(|line| line.starts_with("MemAvailable:"))
+                .and_then(|line| line.split_whitespace().nth(1))
+                .and_then(|n| n.parse::<f64>().ok());
+
+            match (mem_total, mem_available) {
+                (Some(total), Some(available)) => {
+                    let used_mib = (total - available) / 1024.0;
+                    let total_mib = total / 1024.0;
+                    format!("{} MiB / {} MiB", used_mib as u64, total_mib as u64)
+                }
+                _ => String::from("--"),
+            }
+        }
+        None => String::from("--"),
+    };
+
+    println!("Albert's Eyes");
+    println!("Uptime           : {}", uptime_display);
+    println!("Load Avg         : {}", load_display);
+    println!("Storage          : --");
+    println!("Memory           : {}", mem_display);
+    println!("CPU/HDD Temp     : {} °C / --", temperature);
+    println!("Copyparty status : --");
 }
