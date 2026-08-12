@@ -120,6 +120,17 @@ fn main() {
     } else {String::from("--")};
 
 
+    let output = Command::new("systemctl")
+        .args(["--user", "is-active", "copyparty"])
+        .output();
+
+    let copyparty_display = match output {
+        Ok(output) => {
+            let status = String::from_utf8_lossy(&output.stdout);
+            status.trim().to_string()
+        }
+        Err(_) => "unknown".to_string(),
+    };
 
     println!("Albert's Eyes");
     println!("Uptime           : {}", uptime_display);
@@ -127,5 +138,4 @@ fn main() {
     println!("Storage          : {}", storage_display);
     println!("Memory           : {}", mem_display);
     println!("CPU/HDD Temp     : {} °C / --", temperature);
-    println!("Copyparty status : --");
-}
+    println!("Copyparty status : {}", copyparty_display);
