@@ -139,3 +139,5 @@ fn main() {
     println!("Memory           : {}", mem_display);
     println!("CPU/HDD Temp     : {} °C / --", temperature);
     println!("Copyparty status : {}", copyparty_display);
+
+}
