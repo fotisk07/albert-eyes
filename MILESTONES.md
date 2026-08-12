@@ -76,7 +76,15 @@ Represent states as running, stopped, failed, or unknown.
 
 Learn external commands, exit codes, enums, and mapping machine state to display text.
 
-## 7. Status snapshot
+## 7. Restic backup status
+
+Check the Restic repository at `/srv/storage/backups/dell-pc` and display the age of its latest snapshot.
+
+Show a simple state: current, stale, or unavailable. Invoke the `restic snapshots` command and handle command or parsing failures without crashing.
+
+**Complete when:** Albert Eyes shows when the latest backup was created and warns when it is more than 48 hours old.
+
+## 8. Status snapshot
 
 Introduce one structure representing the complete observed state of Albert:
 
@@ -92,7 +100,7 @@ Adopt the conceptual flow: collect status, produce a snapshot, then render the s
 
 Learn structs, ownership, optional data, and separation between collection and presentation. Split into modules only when one file has genuinely become uncomfortable.
 
-## 8. Parsing tests
+## 9. Parsing tests
 
 Separate parsing from file and command access. Test parsers using representative text for:
 
@@ -106,7 +114,7 @@ Learn unit tests, pure functions, and edge-case handling.
 
 **Complete when:** tests, Clippy, and formatting checks all succeed.
 
-## 9. Continuous refresh
+## 10. Continuous refresh
 
 Turn the one-frame report into a dashboard:
 
@@ -118,7 +126,7 @@ Turn the one-frame report into a dashboard:
 
 Start with the standard library. Consider `crossterm` only if basic terminal handling becomes unreliable.
 
-## 10. Health and personality
+## 11. Health and personality
 
 Derive an overall state such as healthy, attention, warning, or unknown.
 
@@ -131,7 +139,7 @@ Use it to select:
 
 Possible warning conditions include elevated temperature, nearly full storage, stopped services, and unavailable metrics.
 
-## 11. Configuration
+## 12. Configuration
 
 Make these choices easy to change:
 
@@ -142,7 +150,7 @@ Make these choices easy to change:
 
 Begin with constants. Add a configuration file only if runtime configuration becomes genuinely useful.
 
-## 12. Deploy to Albert
+## 13. Deploy to Albert
 
 Choose either native compilation on Albert or cross-compilation from the PC. Native compilation is simpler for a first project; cross-compilation can be a later exercise.
 

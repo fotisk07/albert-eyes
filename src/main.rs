@@ -95,10 +95,36 @@ fn main() {
         None => String::from("--"),
     };
 
+    use std::process::Command;
+
+    let output = Command::new("df")
+        .args([
+            "--output=size,used,avail,pcent,target",
+            "-h",
+            "/srv/storage",
+        ])
+        .output()
+        .expect("Failed to run df");
+
+    let storage_display =
+    if output.status.success() {
+        let text = String::from_utf8_lossy(&output.stdout);
+        let line = text.lines().nth(1).unwrap();
+        let parts: Vec<&str> = line.split_whitespace().collect();
+        let total = parts[0];
+        let used = parts[1];
+        let percentage = parts[3];
+
+        format!("{} used ({} / {}) ", percentage, used, total)
+
+    } else {String::from("--")};
+
+
+
     println!("Albert's Eyes");
     println!("Uptime           : {}", uptime_display);
     println!("Load Avg         : {}", load_display);
-    println!("Storage          : --");
+    println!("Storage          : {}", storage_display);
     println!("Memory           : {}", mem_display);
     println!("CPU/HDD Temp     : {} °C / --", temperature);
     println!("Copyparty status : --");
