@@ -1,6 +1,13 @@
 use std::fs;
 use chrono::{DateTime, Utc};
 
+
+struct StatusSnapshot {
+    temperature : String,
+    uptime : String,
+}
+
+
 fn main() {
     let temperature: String = match fs::read_to_string("/sys/class/thermal/thermal_zone0/temp") {
         Ok(v) => v,
@@ -181,12 +188,17 @@ fn main() {
         Err(_) => String::from("Error"),
     };
 
+    let snapshot = StatusSnapshot{
+        temperature: temperature,
+        uptime: uptime_display,
+    };
+
     println!("Albert's Eyes");
-    println!("Uptime           : {}", uptime_display);
+    println!("Uptime           : {}", snapshot.uptime);
     println!("Load Avg         : {}", load_display);
     println!("Storage          : {}", storage_display);
     println!("Memory           : {}", mem_display);
-    println!("CPU/HDD Temp     : {} °C / --", temperature);
+    println!("CPU/HDD Temp     : {} °C / --", snapshot.temperature);
     println!("\n");
     println!("Copyparty status : {}", copyparty_display);
     println!("Last Backup      : {}", restic_display);
