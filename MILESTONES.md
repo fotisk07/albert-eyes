@@ -70,7 +70,6 @@ Learn child processes, exit statuses, standard output, column parsing, and comma
 Check:
 
 - Copyparty as a user service
-- SSH as a system service
 
 Represent states as running, stopped, failed, or unknown.
 

@@ -106,8 +106,7 @@ fn main() {
         .output()
         .expect("Failed to run df");
 
-    let storage_display =
-    if output.status.success() {
+    let storage_display = if output.status.success() {
         let text = String::from_utf8_lossy(&output.stdout);
         let line = text.lines().nth(1).unwrap();
         let parts: Vec<&str> = line.split_whitespace().collect();
@@ -116,9 +115,9 @@ fn main() {
         let percentage = parts[3];
 
         format!("{} used ({} / {}) ", percentage, used, total)
-
-    } else {String::from("--")};
-
+    } else {
+        String::from("--")
+    };
 
     let output = Command::new("systemctl")
         .args(["--user", "is-active", "copyparty"])
@@ -132,12 +131,36 @@ fn main() {
         Err(_) => "unknown".to_string(),
     };
 
+    let restic = Command::new("restic")
+        .args([
+            "--password-file",
+            "/home/fotis/.config/albert-eyes/restic/restic-password",
+            "-r",
+            "/srv/storage/backups/dell-pc/",
+            "snapshots",
+            "--latest",
+            "1",
+        ])
+        .output();
+
+    let restic_display = match restic {
+        Ok(v) => {
+            if v.status.success() {
+                "Online"
+            } else {
+                "Error"
+            }
+        }
+        Err(_) => "Error",
+    };
+
     println!("Albert's Eyes");
     println!("Uptime           : {}", uptime_display);
     println!("Load Avg         : {}", load_display);
     println!("Storage          : {}", storage_display);
     println!("Memory           : {}", mem_display);
     println!("CPU/HDD Temp     : {} °C / --", temperature);
+    println!("\n");
     println!("Copyparty status : {}", copyparty_display);
-
+    println!("Last Backup      : {}", restic_display);
 }
