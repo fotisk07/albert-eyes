@@ -99,19 +99,6 @@ Adopt the conceptual flow: collect status, produce a snapshot, then render the s
 
 Learn structs, ownership, optional data, and separation between collection and presentation. Split into modules only when one file has genuinely become uncomfortable.
 
-## 9. Parsing tests
-
-Separate parsing from file and command access. Test parsers using representative text for:
-
-- Valid and invalid temperatures
-- Valid and malformed uptime
-- Valid and malformed `/proc` input
-- Valid `df` output
-- Missing fields
-
-Learn unit tests, pure functions, and edge-case handling.
-
-**Complete when:** tests, Clippy, and formatting checks all succeed.
 
 ## 10. Continuous refresh
 
@@ -128,6 +115,8 @@ Start with the standard library. Consider `crossterm` only if basic terminal han
 ## 11. Health and personality
 
 Derive an overall state such as healthy, attention, warning, or unknown.
+Give him googly eyes that adapt to what is going on, a little bit like a celullar automata
+Albert should have a personality !
 
 Use it to select:
 

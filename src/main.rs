@@ -1,8 +1,7 @@
 use std::fs;
+use chrono::{DateTime, Utc};
 
 fn main() {
-    println!("Hello sir\n\n");
-
     let temperature: String = match fs::read_to_string("/sys/class/thermal/thermal_zone0/temp") {
         Ok(v) => v,
         Err(_e) => String::from("unknown"),
@@ -140,18 +139,46 @@ fn main() {
             "snapshots",
             "--latest",
             "1",
+            "--json"
         ])
         .output();
 
     let restic_display = match restic {
         Ok(v) => {
             if v.status.success() {
-                "Online"
+                let restic_json = String::from_utf8_lossy(&v.stdout).to_string();
+
+                let parsed: serde_json::Value =
+                    serde_json::from_str(&restic_json).unwrap();
+
+                let time_str = parsed[0]["time"]
+                    .as_str()
+                    .unwrap_or("Unknown")
+                    .to_string();
+
+                let snapshot_time = DateTime::parse_from_rfc3339(&time_str);
+
+                match snapshot_time {
+                    Ok(v) => {
+                        let now = Utc::now();
+
+                        let age = now - v.with_timezone(&Utc);
+
+                        if age.num_hours() > 48 {
+                            format!("Stale ({} hours ago)", age.num_hours())
+                        } else {
+                            format!("Current ({} hours ago)", age.num_hours())
+                        }
+                    }
+
+                    Err(_) => String::from("Unavailable"),
+                }
             } else {
-                "Error"
+                String::from("Error")
             }
         }
-        Err(_) => "Error",
+
+        Err(_) => String::from("Error"),
     };
 
     println!("Albert's Eyes");
