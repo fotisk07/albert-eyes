@@ -1,14 +1,33 @@
-use std::fs;
 use chrono::{DateTime, Utc};
-
+use std::fs;
 
 struct StatusSnapshot {
-    temperature : String,
-    uptime : String,
+    temperature: String,
+    uptime: String,
+    load: String,
+    memory: String,
+    storage: String,
+    copyparty: String,
+    backup: String,
+
+    collected_at: DateTime<Utc>,
 }
 
+fn render(snapshot: &StatusSnapshot) {
+    println!("Albert's Eyes");
+    println!("Uptime           : {}", snapshot.uptime);
+    println!("Load Avg         : {}", snapshot.load);
+    println!("Storage          : {}", snapshot.storage);
+    println!("Memory           : {}", snapshot.memory);
+    println!("CPU/HDD Temp     : {} °C / --", snapshot.temperature);
+    println!("\n");
+    println!("Copyparty status : {}", snapshot.copyparty);
+    println!("Last Backup      : {}", snapshot.backup);
 
-fn main() {
+    println!("Collected at {}", snapshot.collected_at)
+}
+
+fn collect_status() -> StatusSnapshot {
     let temperature: String = match fs::read_to_string("/sys/class/thermal/thermal_zone0/temp") {
         Ok(v) => v,
         Err(_e) => String::from("unknown"),
@@ -146,7 +165,7 @@ fn main() {
             "snapshots",
             "--latest",
             "1",
-            "--json"
+            "--json",
         ])
         .output();
 
@@ -155,13 +174,9 @@ fn main() {
             if v.status.success() {
                 let restic_json = String::from_utf8_lossy(&v.stdout).to_string();
 
-                let parsed: serde_json::Value =
-                    serde_json::from_str(&restic_json).unwrap();
+                let parsed: serde_json::Value = serde_json::from_str(&restic_json).unwrap();
 
-                let time_str = parsed[0]["time"]
-                    .as_str()
-                    .unwrap_or("Unknown")
-                    .to_string();
+                let time_str = parsed[0]["time"].as_str().unwrap_or("Unknown").to_string();
 
                 let snapshot_time = DateTime::parse_from_rfc3339(&time_str);
 
@@ -188,18 +203,21 @@ fn main() {
         Err(_) => String::from("Error"),
     };
 
-    let snapshot = StatusSnapshot{
+    let snapshot = StatusSnapshot {
         temperature: temperature,
         uptime: uptime_display,
+        load: load_display,
+        memory: mem_display,
+        storage: storage_display,
+        copyparty: copyparty_display,
+        backup: restic_display,
+        collected_at: Utc::now(),
     };
 
-    println!("Albert's Eyes");
-    println!("Uptime           : {}", snapshot.uptime);
-    println!("Load Avg         : {}", load_display);
-    println!("Storage          : {}", storage_display);
-    println!("Memory           : {}", mem_display);
-    println!("CPU/HDD Temp     : {} °C / --", snapshot.temperature);
-    println!("\n");
-    println!("Copyparty status : {}", copyparty_display);
-    println!("Last Backup      : {}", restic_display);
+    snapshot
+}
+
+fn main() {
+    let status = collect_status();
+    render(&status);
 }
