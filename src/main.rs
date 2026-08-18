@@ -1,9 +1,10 @@
 use chrono::{DateTime, Utc};
 use std::fs;
+use std::time::Duration;
 
 struct StatusSnapshot {
-    temperature: String,
-    uptime: String,
+    temperature: Option<i32>,
+    uptime: Option<Duration>,
     load: String,
     memory: String,
     storage: String,
@@ -14,12 +15,30 @@ struct StatusSnapshot {
 }
 
 fn render(snapshot: &StatusSnapshot) {
+    let temperature = match snapshot.temperature {
+        Some(v) => v.to_string(),
+        None => String::from("--"),
+    };
+
+    let uptime = match snapshot.uptime {
+        Some(v) => {
+            let sec = v.as_secs();
+            let days = sec / (3600 * 24);
+            let remainder = sec % (3600 * 24);
+            let hours = remainder / 3600;
+            let remainder = remainder % 3600;
+            let minutes = remainder / 60;
+            format!("{}d {}h {}m", days, hours, minutes)
+        }
+        None => String::from("--"),
+    };
+
     println!("Albert's Eyes");
-    println!("Uptime           : {}", snapshot.uptime);
+    println!("CPU/HDD Temp     : {} °C / --", temperature);
+    println!("Uptime           : {}", uptime);
     println!("Load Avg         : {}", snapshot.load);
     println!("Storage          : {}", snapshot.storage);
     println!("Memory           : {}", snapshot.memory);
-    println!("CPU/HDD Temp     : {} °C / --", snapshot.temperature);
     println!("\n");
     println!("Copyparty status : {}", snapshot.copyparty);
     println!("Last Backup      : {}", snapshot.backup);
@@ -27,52 +46,28 @@ fn render(snapshot: &StatusSnapshot) {
     println!("Collected at {}", snapshot.collected_at)
 }
 
-fn collect_status() -> StatusSnapshot {
+fn collect_temperature() -> Option<i32> {
     let temperature: String = match fs::read_to_string("/sys/class/thermal/thermal_zone0/temp") {
         Ok(v) => v,
-        Err(_e) => String::from("unknown"),
+        Err(_e) => return None,
     };
 
-    let temperature: Option<i32> = match temperature.trim().parse::<i32>() {
-        Ok(v) => Some(v / 1000),
-        Err(_e) => None,
-    };
+    temperature
+        .trim()
+        .parse::<i32>()
+        .ok()
+        .map(|value| value / 1000)
+}
 
-    let temperature = match temperature {
-        Some(v) => v.to_string(),
-        None => String::from("--"),
-    };
+fn collect_uptime() -> Option<Duration> {
+    let uptime: String = fs::read_to_string("/proc/uptime").ok()?;
+    let uptime = uptime.split_whitespace().next()?;
+    let uptime: f64 = uptime.parse::<f64>().ok()?;
 
-    let uptime: Option<String> = match fs::read_to_string("/proc/uptime") {
-        Ok(v) => Some(v),
-        Err(_e) => None,
-    };
+    Duration::try_from_secs_f64(uptime).ok()
+}
 
-    let uptime: Option<String> = match uptime {
-        Some(v) => Some(v.split(" ").next().unwrap_or("--").to_string()),
-        None => None,
-    };
-
-    let uptime: Option<f64> = match uptime {
-        Some(v) => match v.parse::<f64>() {
-            Ok(n) => Some(n),
-            Err(_e) => None,
-        },
-        None => None,
-    };
-
-    let uptime_display = match uptime {
-        Some(v) => {
-            let days = v / (3600.0 * 24.0);
-            let remainder = v % (3600.0 * 24.0);
-            let hours = remainder / 3600.0;
-            let remainder = remainder % 3600.0;
-            let minutes = remainder / 60.0;
-            format!("{}d {}h {}m", days as u64, hours as u64, minutes as u64)
-        }
-        None => String::from("--"),
-    };
-
+fn collect_status() -> StatusSnapshot {
     let load_avg: Option<String> = match fs::read_to_string("/proc/loadavg") {
         Ok(v) => Some(v),
         Err(_e) => None,
@@ -204,8 +199,8 @@ fn collect_status() -> StatusSnapshot {
     };
 
     let snapshot = StatusSnapshot {
-        temperature: temperature,
-        uptime: uptime_display,
+        temperature: collect_temperature(),
+        uptime: collect_uptime(),
         load: load_display,
         memory: mem_display,
         storage: storage_display,
