@@ -1,13 +1,32 @@
 use chrono::{DateTime, Utc};
 use std::fs;
+use std::process::Command;
 use std::time::Duration;
+
+const BYTES_PER_GIB: f64 = 1_073_741_824.0;
+
+struct Uptime {
+    days: u64,
+    hours: u64,
+    minutes: u64,
+}
+
+struct MemoryUsage {
+    used: u64,
+    total: u64,
+}
+
+struct StorageUsage {
+    used_gib: f64,
+    total_gib: f64,
+    percent_used: u8,
+}
 
 struct StatusSnapshot {
     temperature: Option<i32>,
-    uptime: Option<Duration>,
-    load: String,
-    memory: String,
-    storage: String,
+    uptime: Option<Uptime>,
+    memory: Option<MemoryUsage>,
+    storage: Option<StorageUsage>,
     copyparty: String,
     backup: String,
 
@@ -20,25 +39,28 @@ fn render(snapshot: &StatusSnapshot) {
         None => String::from("--"),
     };
 
-    let uptime = match snapshot.uptime {
-        Some(v) => {
-            let sec = v.as_secs();
-            let days = sec / (3600 * 24);
-            let remainder = sec % (3600 * 24);
-            let hours = remainder / 3600;
-            let remainder = remainder % 3600;
-            let minutes = remainder / 60;
-            format!("{}d {}h {}m", days, hours, minutes)
-        }
+    let uptime = match &snapshot.uptime {
+        Some(v) => format!("{}d {}h {}m", v.days, v.hours, v.minutes),
         None => String::from("--"),
     };
 
-    println!("Albert's Eyes");
+    let memory = match &snapshot.memory {
+        Some(v) => format!("{} MiB / {} MiB", v.used, v.total),
+        None => String::from("--"),
+    };
+
+    let storage = match &snapshot.storage {
+        Some(v) => format!(
+            "{}% used ({:.1} GiB / {:.1} GiB)",
+            v.percent_used, v.used_gib, v.total_gib
+        ),
+        None => String::from("--"),
+    };
+
     println!("CPU/HDD Temp     : {} °C / --", temperature);
     println!("Uptime           : {}", uptime);
-    println!("Load Avg         : {}", snapshot.load);
-    println!("Storage          : {}", snapshot.storage);
-    println!("Memory           : {}", snapshot.memory);
+    println!("Storage          : {}", storage);
+    println!("Memory           : {}", memory);
     println!("\n");
     println!("Copyparty status : {}", snapshot.copyparty);
     println!("Last Backup      : {}", snapshot.backup);
@@ -59,86 +81,70 @@ fn collect_temperature() -> Option<i32> {
         .map(|value| value / 1000)
 }
 
-fn collect_uptime() -> Option<Duration> {
+fn collect_uptime() -> Option<Uptime> {
     let uptime: String = fs::read_to_string("/proc/uptime").ok()?;
     let uptime = uptime.split_whitespace().next()?;
     let uptime: f64 = uptime.parse::<f64>().ok()?;
+    let total_seconds = Duration::try_from_secs_f64(uptime).ok()?.as_secs();
 
-    Duration::try_from_secs_f64(uptime).ok()
+    Some(Uptime {
+        days: total_seconds / 86_400,
+        hours: (total_seconds % 86_400) / 3_600,
+        minutes: (total_seconds % 3_600) / 60,
+    })
 }
 
-fn collect_status() -> StatusSnapshot {
-    let load_avg: Option<String> = match fs::read_to_string("/proc/loadavg") {
-        Ok(v) => Some(v),
-        Err(_e) => None,
-    };
-    let load_display: String = match load_avg {
-        Some(v) => {
-            let mut fields = v.split(" ");
-            let one_min = fields.next().unwrap_or("--").to_string();
-            let five_min = fields.next().unwrap_or("--").to_string();
-            let fifteen_min = fields.next().unwrap_or("--").to_string();
+fn collect_memory() -> Option<MemoryUsage> {
+    let meminfo = fs::read_to_string("/proc/meminfo").ok()?;
 
-            format!("1m {} · 5m {} · 15m {}", one_min, five_min, fifteen_min)
-        }
-        None => String::from("--"),
-    };
+    let mem_total = meminfo
+        .lines()
+        .find(|line| line.starts_with("MemTotal:"))
+        .and_then(|line| line.split_whitespace().nth(1))
+        .and_then(|n| n.parse::<u64>().ok())?;
 
-    let meminfo: Option<String> = match fs::read_to_string("/proc/meminfo") {
-        Ok(v) => Some(v),
-        Err(_e) => None,
-    };
+    let mem_available = meminfo
+        .lines()
+        .find(|line| line.starts_with("MemAvailable:"))
+        .and_then(|line| line.split_whitespace().nth(1))
+        .and_then(|n| n.parse::<u64>().ok())?;
 
-    let mem_display = match meminfo {
-        Some(v) => {
-            let mem_total = v
-                .lines()
-                .find(|line| line.starts_with("MemTotal:"))
-                .and_then(|line| line.split_whitespace().nth(1))
-                .and_then(|n| n.parse::<f64>().ok());
+    Some(MemoryUsage {
+        used: (mem_total - mem_available) / 1024,
+        total: mem_total / 1024,
+    })
+}
 
-            let mem_available = v
-                .lines()
-                .find(|line| line.starts_with("MemAvailable:"))
-                .and_then(|line| line.split_whitespace().nth(1))
-                .and_then(|n| n.parse::<f64>().ok());
-
-            match (mem_total, mem_available) {
-                (Some(total), Some(available)) => {
-                    let used_mib = (total - available) / 1024.0;
-                    let total_mib = total / 1024.0;
-                    format!("{} MiB / {} MiB", used_mib as u64, total_mib as u64)
-                }
-                _ => String::from("--"),
-            }
-        }
-        None => String::from("--"),
-    };
-
-    use std::process::Command;
-
+fn collect_storage() -> Option<StorageUsage> {
     let output = Command::new("df")
         .args([
             "--output=size,used,avail,pcent,target",
-            "-h",
+            "-B1",
             "/srv/storage",
         ])
         .output()
-        .expect("Failed to run df");
+        .ok()?;
 
-    let storage_display = if output.status.success() {
-        let text = String::from_utf8_lossy(&output.stdout);
-        let line = text.lines().nth(1).unwrap();
-        let parts: Vec<&str> = line.split_whitespace().collect();
-        let total = parts[0];
-        let used = parts[1];
-        let percentage = parts[3];
+    if !output.status.success() {
+        return None;
+    }
 
-        format!("{} used ({} / {}) ", percentage, used, total)
-    } else {
-        String::from("--")
-    };
+    let text = String::from_utf8_lossy(&output.stdout);
+    let line = text.lines().nth(1)?;
+    let parts: Vec<&str> = line.split_whitespace().collect();
 
+    let total_bytes = parts.first()?.parse::<u64>().ok()?;
+    let used_bytes = parts.get(1)?.parse::<u64>().ok()?;
+    let percent_used = parts.get(3)?.trim_end_matches('%').parse::<u8>().ok()?;
+
+    Some(StorageUsage {
+        used_gib: used_bytes as f64 / BYTES_PER_GIB,
+        total_gib: total_bytes as f64 / BYTES_PER_GIB,
+        percent_used,
+    })
+}
+
+fn collect_status() -> StatusSnapshot {
     let output = Command::new("systemctl")
         .args(["--user", "is-active", "copyparty"])
         .output();
@@ -198,18 +204,15 @@ fn collect_status() -> StatusSnapshot {
         Err(_) => String::from("Error"),
     };
 
-    let snapshot = StatusSnapshot {
+    StatusSnapshot {
         temperature: collect_temperature(),
         uptime: collect_uptime(),
-        load: load_display,
-        memory: mem_display,
-        storage: storage_display,
+        memory: collect_memory(),
+        storage: collect_storage(),
         copyparty: copyparty_display,
         backup: restic_display,
         collected_at: Utc::now(),
-    };
-
-    snapshot
+    }
 }
 
 fn main() {
