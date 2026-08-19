@@ -86,7 +86,6 @@ Introduce one structure representing the complete observed state of Albert:
 - Memory
 - Storage
 - Services
-- Collection time
 
 Adopt the conceptual flow: collect status, produce a snapshot, then render the snapshot.
 
