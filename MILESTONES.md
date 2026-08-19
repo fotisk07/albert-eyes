@@ -12,7 +12,6 @@ Work on one milestone at a time. Avoid adding crates or abstractions before they
 
 Print one static, well-formatted screen containing:
 
-- An `ALBERT EYES` title
 - Placeholder temperature
 - Placeholder uptime
 - Placeholder storage usage
@@ -39,16 +38,11 @@ Learn text splitting, numeric conversion, duration formatting, and separating co
 
 **Complete when:** real uptime is displayed and malformed or missing input is handled safely.
 
-## 4. Load and memory
+## 4. Memory
 
-Read `/proc/loadavg` and `/proc/meminfo`.
+Read `/proc/meminfo` and display used and total memory.
 
-Display:
-
-- 1, 5, and 15-minute load averages
-- Used and total memory
-
-Learn structured-text parsing, named-field lookup, unit conversion, and Linux memory semantics. Load and memory may be treated as separate sub-milestones.
+Learn structured-text parsing, named-field lookup, unit conversion, and Linux memory semantics.
 
 ## 5. Storage usage
 
@@ -89,7 +83,6 @@ Introduce one structure representing the complete observed state of Albert:
 
 - Temperature
 - Uptime
-- Load
 - Memory
 - Storage
 - Services
