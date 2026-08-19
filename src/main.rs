@@ -21,13 +21,19 @@ struct StorageUsage {
     total_gib: f64,
     percent_used: u8,
 }
+enum ServiceState {
+    Running,
+    Stopped,
+    Failed,
+    Unknown,
+}
 
 struct StatusSnapshot {
     temperature: Option<i32>,
     uptime: Option<Uptime>,
     memory: Option<MemoryUsage>,
     storage: Option<StorageUsage>,
-    copyparty: String,
+    copyparty: ServiceState,
     backup: String,
 
     collected_at: DateTime<Utc>,
@@ -57,12 +63,19 @@ fn render(snapshot: &StatusSnapshot) {
         None => String::from("--"),
     };
 
+    let copyparty = match snapshot.copyparty {
+        ServiceState::Running => "Running",
+        ServiceState::Stopped => "Stopped",
+        ServiceState::Failed => "Failed",
+        ServiceState::Unknown => "Unknown",
+    };
+
     println!("CPU/HDD Temp     : {} °C / --", temperature);
     println!("Uptime           : {}", uptime);
     println!("Storage          : {}", storage);
     println!("Memory           : {}", memory);
     println!("\n");
-    println!("Copyparty status : {}", snapshot.copyparty);
+    println!("Copyparty status : {}", copyparty);
     println!("Last Backup      : {}", snapshot.backup);
 
     println!("Collected at {}", snapshot.collected_at)
@@ -144,19 +157,28 @@ fn collect_storage() -> Option<StorageUsage> {
     })
 }
 
-fn collect_status() -> StatusSnapshot {
+fn collect_copyparty() -> ServiceState {
     let output = Command::new("systemctl")
         .args(["--user", "is-active", "copyparty"])
         .output();
 
-    let copyparty_display = match output {
-        Ok(output) => {
-            let status = String::from_utf8_lossy(&output.stdout);
-            status.trim().to_string()
-        }
-        Err(_) => "unknown".to_string(),
-    };
+    match output {
+        Ok(v) => {
+            let text = String::from_utf8_lossy(&v.stdout);
+            let status = text.trim();
 
+            match status {
+                "active" => ServiceState::Running,
+                "inactive" => ServiceState::Stopped,
+                "failed" => ServiceState::Failed,
+                _ => ServiceState::Unknown,
+            }
+        }
+        Err(_) => ServiceState::Unknown,
+    }
+}
+
+fn collect_status() -> StatusSnapshot {
     let restic = Command::new("restic")
         .args([
             "--password-file",
@@ -209,7 +231,7 @@ fn collect_status() -> StatusSnapshot {
         uptime: collect_uptime(),
         memory: collect_memory(),
         storage: collect_storage(),
-        copyparty: copyparty_display,
+        copyparty: collect_copyparty(),
         backup: restic_display,
         collected_at: Utc::now(),
     }
