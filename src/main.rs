@@ -28,15 +28,19 @@ enum ServiceState {
     Unknown,
 }
 
+enum BackupStatus {
+    Current { age_hours: i64 },
+    Stale { age_hours: i64 },
+    Unavailable,
+}
+
 struct StatusSnapshot {
     temperature: Option<i32>,
     uptime: Option<Uptime>,
     memory: Option<MemoryUsage>,
     storage: Option<StorageUsage>,
     copyparty: ServiceState,
-    backup: String,
-
-    collected_at: DateTime<Utc>,
+    backup: BackupStatus,
 }
 
 fn render(snapshot: &StatusSnapshot) {
@@ -70,15 +74,19 @@ fn render(snapshot: &StatusSnapshot) {
         ServiceState::Unknown => "Unknown",
     };
 
+    let backup = match &snapshot.backup {
+        BackupStatus::Current { age_hours } => format!("Current ({} hours ago)", age_hours),
+        BackupStatus::Stale { age_hours } => format!("Stale ({} hours ago)", age_hours),
+        BackupStatus::Unavailable => String::from("Unavailable"),
+    };
+
     println!("CPU/HDD Temp     : {} °C / --", temperature);
     println!("Uptime           : {}", uptime);
     println!("Storage          : {}", storage);
     println!("Memory           : {}", memory);
     println!("\n");
     println!("Copyparty status : {}", copyparty);
-    println!("Last Backup      : {}", snapshot.backup);
-
-    println!("Collected at {}", snapshot.collected_at)
+    println!("Last Backup      : {}", backup);
 }
 
 fn collect_temperature() -> Option<i32> {
@@ -178,7 +186,7 @@ fn collect_copyparty() -> ServiceState {
     }
 }
 
-fn collect_status() -> StatusSnapshot {
+fn collect_backup() -> BackupStatus {
     let restic = Command::new("restic")
         .args([
             "--password-file",
@@ -192,48 +200,52 @@ fn collect_status() -> StatusSnapshot {
         ])
         .output();
 
-    let restic_display = match restic {
+    match restic {
         Ok(v) => {
             if v.status.success() {
                 let restic_json = String::from_utf8_lossy(&v.stdout).to_string();
 
-                let parsed: serde_json::Value = serde_json::from_str(&restic_json).unwrap();
+                let parsed = serde_json::from_str::<serde_json::Value>(&restic_json);
 
+                let parsed = match parsed {
+                    Ok(v) => v,
+                    Err(_) => return BackupStatus::Unavailable,
+                };
                 let time_str = parsed[0]["time"].as_str().unwrap_or("Unknown").to_string();
-
                 let snapshot_time = DateTime::parse_from_rfc3339(&time_str);
-
                 match snapshot_time {
                     Ok(v) => {
                         let now = Utc::now();
-
                         let age = now - v.with_timezone(&Utc);
 
                         if age.num_hours() > 48 {
-                            format!("Stale ({} hours ago)", age.num_hours())
+                            BackupStatus::Stale {
+                                age_hours: age.num_hours(),
+                            }
                         } else {
-                            format!("Current ({} hours ago)", age.num_hours())
+                            BackupStatus::Current {
+                                age_hours: age.num_hours(),
+                            }
                         }
                     }
-
-                    Err(_) => String::from("Unavailable"),
+                    Err(_) => BackupStatus::Unavailable,
                 }
             } else {
-                String::from("Error")
+                BackupStatus::Unavailable
             }
         }
+        Err(_) => BackupStatus::Unavailable,
+    }
+}
 
-        Err(_) => String::from("Error"),
-    };
-
+fn collect_status() -> StatusSnapshot {
     StatusSnapshot {
         temperature: collect_temperature(),
         uptime: collect_uptime(),
         memory: collect_memory(),
         storage: collect_storage(),
         copyparty: collect_copyparty(),
-        backup: restic_display,
-        collected_at: Utc::now(),
+        backup: collect_backup(),
     }
 }
 
