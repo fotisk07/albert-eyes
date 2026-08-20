@@ -44,7 +44,14 @@ struct StatusSnapshot {
     backup: BackupStatus,
 }
 
-fn render(snapshot: &StatusSnapshot) {
+enum OverallHealth {
+    Healthy,
+    Attention,
+    Warning,
+    Unknown,
+}
+
+fn render(snapshot: &StatusSnapshot, health: &OverallHealth) {
     let temperature = match snapshot.temperature {
         Some(v) => v.to_string(),
         None => String::from("--"),
@@ -81,6 +88,14 @@ fn render(snapshot: &StatusSnapshot) {
         BackupStatus::Unavailable => String::from("Unavailable"),
     };
 
+    let health = match health {
+        OverallHealth::Healthy => "All good",
+        OverallHealth::Attention => "Something is not great",
+        OverallHealth::Warning => "AHHHHHH",
+        OverallHealth::Unknown => "x x ",
+    };
+
+    println!("##### {} #####\n\n", health);
     println!("CPU/HDD Temp     : {} °C / --", temperature);
     println!("Uptime           : {}", uptime);
     println!("Storage          : {}", storage);
@@ -250,13 +265,29 @@ fn collect_status() -> StatusSnapshot {
     }
 }
 
+fn derive_health(snapshot: &StatusSnapshot) -> OverallHealth {
+    match snapshot.temperature {
+        None => OverallHealth::Unknown,
+        Some(v) => {
+            if v < 70 {
+                OverallHealth::Healthy
+            } else if v < 80 {
+                OverallHealth::Attention
+            } else {
+                OverallHealth::Warning
+            }
+        }
+    }
+}
+
 fn main() {
     loop {
         let status = collect_status();
+        let health = derive_health(&status);
         print!("\x1B[2J");
         print!("\x1B[H");
 
-        render(&status);
+        render(&status, &health);
         let _ = std::io::stdout().flush();
 
         let sleep_duration = time::Duration::from_secs(2);
