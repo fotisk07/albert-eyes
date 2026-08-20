@@ -7,6 +7,7 @@ use std::{thread, time};
 
 const BYTES_PER_GIB: f64 = 1_073_741_824.0;
 const COPYPARTY_UPDATE: u64 = 30;
+const STORAGE_UPDATE: u64 = 60;
 
 struct Uptime {
     days: u64,
@@ -290,6 +291,10 @@ fn main() {
         if copyparty_times.elapsed() >= Duration::from_secs(COPYPARTY_UPDATE) {
             status.copyparty = collect_copyparty();
             copyparty_times = Instant::now();
+        }
+        if storage_times.elapsed() >= Duration::from_secs(STORAGE_UPDATE) {
+            status.storage = collect_storage();
+            storage_times = Instant::now();
         }
 
         let health = derive_health(&status);
