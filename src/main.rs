@@ -1,7 +1,8 @@
 use chrono::{DateTime, Utc};
 use std::fs;
+use std::io::Write;
 use std::process::Command;
-use std::time::Duration;
+use std::{thread, time};
 
 const BYTES_PER_GIB: f64 = 1_073_741_824.0;
 
@@ -106,7 +107,7 @@ fn collect_uptime() -> Option<Uptime> {
     let uptime: String = fs::read_to_string("/proc/uptime").ok()?;
     let uptime = uptime.split_whitespace().next()?;
     let uptime: f64 = uptime.parse::<f64>().ok()?;
-    let total_seconds = Duration::try_from_secs_f64(uptime).ok()?.as_secs();
+    let total_seconds = time::Duration::try_from_secs_f64(uptime).ok()?.as_secs();
 
     Some(Uptime {
         days: total_seconds / 86_400,
@@ -250,6 +251,15 @@ fn collect_status() -> StatusSnapshot {
 }
 
 fn main() {
-    let status = collect_status();
-    render(&status);
+    loop {
+        let status = collect_status();
+        print!("\x1B[2J");
+        print!("\x1B[H");
+
+        render(&status);
+        let _ = std::io::stdout().flush();
+
+        let sleep_duration = time::Duration::from_secs(2);
+        thread::sleep(sleep_duration);
+    }
 }
