@@ -2,9 +2,11 @@ use chrono::{DateTime, Utc};
 use std::fs;
 use std::io::Write;
 use std::process::Command;
+use std::time::{Duration, Instant};
 use std::{thread, time};
 
 const BYTES_PER_GIB: f64 = 1_073_741_824.0;
+const COPYPARTY_UPDATE: u64 = 30;
 
 struct Uptime {
     days: u64,
@@ -254,17 +256,6 @@ fn collect_backup() -> BackupStatus {
     }
 }
 
-fn collect_status() -> StatusSnapshot {
-    StatusSnapshot {
-        temperature: collect_temperature(),
-        uptime: collect_uptime(),
-        memory: collect_memory(),
-        storage: collect_storage(),
-        copyparty: collect_copyparty(),
-        backup: collect_backup(),
-    }
-}
-
 fn derive_health(snapshot: &StatusSnapshot) -> OverallHealth {
     match snapshot.temperature {
         None => OverallHealth::Unknown,
@@ -281,8 +272,26 @@ fn derive_health(snapshot: &StatusSnapshot) -> OverallHealth {
 }
 
 fn main() {
+    let mut status = StatusSnapshot {
+        temperature: collect_temperature(),
+        uptime: collect_uptime(),
+        memory: collect_memory(),
+        storage: collect_storage(),
+        copyparty: collect_copyparty(),
+        backup: collect_backup(),
+    };
+    let mut copyparty_times = Instant::now();
+
     loop {
-        let status = collect_status();
+        status.temperature = collect_temperature();
+        status.uptime = collect_uptime();
+        status.memory = collect_memory();
+
+        if copyparty_times.elapsed() >= Duration::from_secs(COPYPARTY_UPDATE) {
+            status.copyparty = collect_copyparty();
+            copyparty_times = Instant::now();
+        }
+
         let health = derive_health(&status);
         print!("\x1B[2J");
         print!("\x1B[H");
