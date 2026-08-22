@@ -2,6 +2,7 @@ use chrono::{DateTime, Utc};
 use std::fs;
 use std::io::Write;
 use std::process::Command;
+use std::sync::mpsc;
 use std::time::{Duration, Instant};
 use std::{thread, time};
 
@@ -33,6 +34,7 @@ enum ServiceState {
 }
 
 enum BackupStatus {
+    Checking,
     Current { age_hours: i64 },
     Stale { age_hours: i64 },
     Unavailable,
@@ -89,6 +91,7 @@ fn render(snapshot: &StatusSnapshot, health: &OverallHealth) {
         BackupStatus::Current { age_hours } => format!("Current ({} hours ago)", age_hours),
         BackupStatus::Stale { age_hours } => format!("Stale ({} hours ago)", age_hours),
         BackupStatus::Unavailable => String::from("Unavailable"),
+        BackupStatus::Checking => String::from("Checking..."),
     };
 
     let health = match health {
@@ -279,14 +282,27 @@ fn main() {
         memory: collect_memory(),
         storage: collect_storage(),
         copyparty: collect_copyparty(),
-        backup: collect_backup(),
+        backup: BackupStatus::Checking,
     };
     let mut copyparty_times = Instant::now();
+    let mut storage_times = Instant::now();
 
+    let (tx, rx) = mpsc::channel();
+
+    thread::spawn(move || {
+        let val = collect_backup();
+        let _ = tx.send(val);
+    });
     loop {
         status.temperature = collect_temperature();
         status.uptime = collect_uptime();
         status.memory = collect_memory();
+
+        let received = rx.try_recv();
+        match received {
+            Ok(v) => status.backup = v,
+            Err(_) => (),
+        }
 
         if copyparty_times.elapsed() >= Duration::from_secs(COPYPARTY_UPDATE) {
             status.copyparty = collect_copyparty();
