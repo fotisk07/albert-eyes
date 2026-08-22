@@ -214,7 +214,7 @@ fn collect_backup() -> BackupStatus {
             "--password-file",
             "/home/fotis/.config/albert-eyes/restic/restic-password",
             "-r",
-            "/srv/storage/backups/dell-pc/",
+            "/srv/storage/backups/fotis-xps/",
             "snapshots",
             "--latest",
             "1",
