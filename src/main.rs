@@ -10,6 +10,7 @@ const BYTES_PER_GIB: f64 = 1_073_741_824.0;
 const COPYPARTY_UPDATE: u64 = 30;
 const STORAGE_UPDATE: u64 = 60;
 const BACKUP_UPDATE_SECS: u64 = 600;
+const ALBERT_DISK_DEVICE: &str = "sda1";
 
 struct Uptime {
     days: u64,
@@ -20,6 +21,11 @@ struct Uptime {
 struct MemoryUsage {
     used: u64,
     total: u64,
+}
+
+struct DiskSample {
+    sectors_read: u64,
+    sectors_written: u64,
 }
 
 struct StorageUsage {
@@ -49,6 +55,7 @@ struct StatusSnapshot {
     cpu_usage: Option<f64>,
     copyparty: ServiceState,
     backup: BackupStatus,
+    disk_activity: Option<DiskActivity>,
 }
 
 enum OverallHealth {
@@ -56,6 +63,12 @@ enum OverallHealth {
     Attention,
     Warning,
     Unknown,
+}
+struct DiskActivity {
+    read_mib_s: f64,
+    write_mib_s: f64,
+    combined_mib_s: f64,
+    active: bool,
 }
 struct CpuSample {
     user: u64,
@@ -95,6 +108,10 @@ fn render(snapshot: &StatusSnapshot, health: &OverallHealth) {
         ),
         None => String::from("--"),
     };
+    let disk = match &snapshot.disk_activity {
+        Some(v) => format!("R {:.1} · W {:.1} MiB/s", v.read_mib_s, v.write_mib_s,),
+        None => String::from("--"),
+    };
 
     let copyparty = match snapshot.copyparty {
         ServiceState::Running => "Running",
@@ -125,6 +142,7 @@ fn render(snapshot: &StatusSnapshot, health: &OverallHealth) {
 
     println!("CPU Usage        : {}", cpu_usage);
     println!("CPU/HDD Temp     : {} / --", temperature);
+    println!("Disk I/O         : {}", disk);
     println!("Uptime           : {}", uptime);
     println!("Storage          : {}", storage);
     println!("Memory           : {}", memory);
@@ -135,6 +153,61 @@ fn render(snapshot: &StatusSnapshot, health: &OverallHealth) {
     println!("Last Backup      : {}", backup);
 }
 
+fn parse_disk_sample(diskstats: &str, device: &str) -> Option<DiskSample> {
+    let fields = diskstats
+        .lines()
+        .map(|line| line.split_whitespace().collect::<Vec<_>>())
+        .find(|fields| fields.get(2) == Some(&device))?;
+
+    let sectors_read = fields.get(5)?.parse().ok()?;
+    let sectors_written = fields.get(9)?.parse().ok()?;
+
+    Some(DiskSample {
+        sectors_read,
+        sectors_written,
+    })
+}
+fn collect_disk_sample() -> Option<DiskSample> {
+    let diskstats = fs::read_to_string("/proc/diskstats").ok()?;
+    parse_disk_sample(&diskstats, ALBERT_DISK_DEVICE)
+}
+fn calculate_disk_activity(
+    previous: &DiskSample,
+    current: &DiskSample,
+    elapsed: Duration,
+) -> Option<DiskActivity> {
+    const BYTES_PER_SECTOR: f64 = 512.0;
+    const BYTES_PER_MIB: f64 = 1_048_576.0;
+
+    let elapsed_secs = elapsed.as_secs_f64();
+
+    if elapsed_secs == 0.0 {
+        return None;
+    }
+
+    let read_sector_delta = current.sectors_read.checked_sub(previous.sectors_read)?;
+
+    let write_sector_delta = current
+        .sectors_written
+        .checked_sub(previous.sectors_written)?;
+
+    let read_bytes = read_sector_delta as f64 * BYTES_PER_SECTOR;
+    let write_bytes = write_sector_delta as f64 * BYTES_PER_SECTOR;
+
+    let read_mib_s = read_bytes / BYTES_PER_MIB / elapsed_secs;
+    let write_mib_s = write_bytes / BYTES_PER_MIB / elapsed_secs;
+
+    let combined_mib_s = read_mib_s + write_mib_s;
+
+    let active = read_sector_delta > 0 || write_sector_delta > 0;
+
+    Some(DiskActivity {
+        read_mib_s,
+        write_mib_s,
+        combined_mib_s,
+        active,
+    })
+}
 fn collect_temperature() -> Option<i32> {
     let temperature: String = match fs::read_to_string("/sys/class/thermal/thermal_zone0/temp") {
         Ok(v) => v,
@@ -364,9 +437,11 @@ fn main() {
         memory: collect_memory(),
         storage: collect_storage(),
         cpu_usage: None,
+        disk_activity: None,
         copyparty: collect_copyparty(),
         backup: BackupStatus::Checking,
     };
+
     let mut copyparty_times = Instant::now();
     let mut storage_times = Instant::now();
 
@@ -377,16 +452,21 @@ fn main() {
         let val = collect_backup();
         let _ = worker_sender.send(val);
     });
+
     let mut backup_command_running = true;
     let mut backup_times = Instant::now();
 
     let mut previous_cpu = None;
+
+    // No baseline yet: first frame will show unavailable.
+    let mut previous_disk: Option<(DiskSample, Instant)> = None;
 
     loop {
         status.temperature = collect_temperature();
         status.uptime = collect_uptime();
         status.memory = collect_memory();
 
+        // CPU
         let current_cpu = collect_cpu_sample();
 
         status.cpu_usage = match (&previous_cpu, &current_cpu) {
@@ -395,6 +475,22 @@ fn main() {
         };
 
         previous_cpu = current_cpu;
+
+        // Disk
+        let current_disk = collect_disk_sample();
+        let current_disk_time = Instant::now();
+
+        status.disk_activity = match (&previous_disk, &current_disk) {
+            (Some((previous, previous_time)), Some(current)) => {
+                let elapsed = current_disk_time.duration_since(*previous_time);
+                calculate_disk_activity(previous, current, elapsed)
+            }
+            _ => None,
+        };
+
+        // If collection failed, this becomes None and resets the baseline.
+        previous_disk = current_disk.map(|sample| (sample, current_disk_time));
+
         let received = rx.try_recv();
         match received {
             Ok(v) => {
