@@ -9,6 +9,7 @@ use std::{thread, time};
 const BYTES_PER_GIB: f64 = 1_073_741_824.0;
 const COPYPARTY_UPDATE: u64 = 30;
 const STORAGE_UPDATE: u64 = 60;
+const BACKUP_UPDATE_MINUTES: u64 = 10;
 
 struct Uptime {
     days: u64,
@@ -289,10 +290,14 @@ fn main() {
 
     let (tx, rx) = mpsc::channel();
 
+    let worker_sender = tx.clone();
     thread::spawn(move || {
         let val = collect_backup();
-        let _ = tx.send(val);
+        let _ = worker_sender.send(val);
     });
+    let mut backup_command_running = true;
+    let mut backup_times = Instant::now();
+
     loop {
         status.temperature = collect_temperature();
         status.uptime = collect_uptime();
@@ -300,8 +305,23 @@ fn main() {
 
         let received = rx.try_recv();
         match received {
-            Ok(v) => status.backup = v,
-            Err(_) => (),
+            Ok(v) => {
+                status.backup = v;
+                backup_command_running = false;
+            }
+            Err(_) => {
+                if backup_times.elapsed() >= Duration::from_mins(BACKUP_UPDATE_MINUTES)
+                    && !backup_command_running
+                {
+                    let worker_sender = tx.clone();
+                    thread::spawn(move || {
+                        let val = collect_backup();
+                        let _ = worker_sender.send(val);
+                    });
+                    backup_command_running = true;
+                    backup_times = Instant::now();
+                }
+            }
         }
 
         if copyparty_times.elapsed() >= Duration::from_secs(COPYPARTY_UPDATE) {
