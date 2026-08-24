@@ -130,7 +130,7 @@ Raw observations are facts; thresholds are policy; character state remembers pri
 - Use capacity bars only for RAM and storage; show disk activity as read/write throughput with no `focused` label.
 - Keep the face completely static: no pupil movement, blinking, or expression changes.
 - Treat first samples, resets, zero elapsed work, malformed files, and missing measurements as unavailable rather than zero.
-- Add focused parser, delta, threshold, and formatting tests using short fixed inputs.
+- Also refactor the code because right now it is a bit too messy. introduce new files, one for rendering for example
 
 **Rust lessons:** data modelling with structs, iterators and parsing, `Option`/`Result`, references versus ownership, safe integer arithmetic, previous/current state, pure functions, fixed-width formatting.
 

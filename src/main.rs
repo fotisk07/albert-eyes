@@ -9,7 +9,7 @@ use std::{thread, time};
 const BYTES_PER_GIB: f64 = 1_073_741_824.0;
 const COPYPARTY_UPDATE: u64 = 30;
 const STORAGE_UPDATE: u64 = 60;
-const BACKUP_UPDATE_MINUTES: u64 = 10;
+const BACKUP_UPDATE_SECS: u64 = 600;
 
 struct Uptime {
     days: u64,
@@ -402,7 +402,7 @@ fn main() {
                 backup_command_running = false;
             }
             Err(_) => {
-                if backup_times.elapsed() >= Duration::from_mins(BACKUP_UPDATE_MINUTES)
+                if backup_times.elapsed() >= Duration::from_secs(BACKUP_UPDATE_SECS)
                     && !backup_command_running
                 {
                     let worker_sender = tx.clone();
