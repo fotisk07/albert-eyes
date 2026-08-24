@@ -46,6 +46,7 @@ struct StatusSnapshot {
     uptime: Option<Uptime>,
     memory: Option<MemoryUsage>,
     storage: Option<StorageUsage>,
+    cpu_usage: Option<f64>,
     copyparty: ServiceState,
     backup: BackupStatus,
 }
@@ -56,10 +57,24 @@ enum OverallHealth {
     Warning,
     Unknown,
 }
-
+struct CpuSample {
+    user: u64,
+    nice: u64,
+    system: u64,
+    idle: u64,
+    iowait: u64,
+    irq: u64,
+    softirq: u64,
+    steal: u64,
+}
 fn render(snapshot: &StatusSnapshot, health: &OverallHealth) {
     let temperature = match snapshot.temperature {
-        Some(v) => v.to_string(),
+        Some(v) => format!("{} °C", v),
+        None => String::from("--"),
+    };
+
+    let cpu_usage = match snapshot.cpu_usage {
+        Some(v) => format!("{:.1}%", v),
         None => String::from("--"),
     };
 
@@ -89,25 +104,33 @@ fn render(snapshot: &StatusSnapshot, health: &OverallHealth) {
     };
 
     let backup = match &snapshot.backup {
-        BackupStatus::Current { age_hours } => format!("Current ({} hours ago)", age_hours),
-        BackupStatus::Stale { age_hours } => format!("Stale ({} hours ago)", age_hours),
+        BackupStatus::Current { age_hours } => {
+            format!("Current ({} hours ago)", age_hours)
+        }
+        BackupStatus::Stale { age_hours } => {
+            format!("Stale ({} hours ago)", age_hours)
+        }
         BackupStatus::Unavailable => String::from("Unavailable"),
         BackupStatus::Checking => String::from("Checking..."),
     };
 
-    let health = match health {
+    let health_text = match health {
         OverallHealth::Healthy => "All good",
         OverallHealth::Attention => "Something is not great",
         OverallHealth::Warning => "AHHHHHH",
-        OverallHealth::Unknown => "x x ",
+        OverallHealth::Unknown => "x x",
     };
 
-    println!("##### {} #####\n\n", health);
-    println!("CPU/HDD Temp     : {} °C / --", temperature);
+    println!("##### {} #####\n", health_text);
+
+    println!("CPU Usage        : {}", cpu_usage);
+    println!("CPU/HDD Temp     : {} / --", temperature);
     println!("Uptime           : {}", uptime);
     println!("Storage          : {}", storage);
     println!("Memory           : {}", memory);
-    println!("\n");
+
+    println!();
+
     println!("Copyparty status : {}", copyparty);
     println!("Last Backup      : {}", backup);
 }
@@ -261,6 +284,64 @@ fn collect_backup() -> BackupStatus {
     }
 }
 
+fn parse_cpu_sample(stat: &str) -> Option<CpuSample> {
+    let line = stat
+        .lines()
+        .find(|line| line.split_whitespace().next() == Some("cpu"))?;
+
+    let mut fields = line.split_whitespace();
+
+    // Consume exactly "cpu"
+    if fields.next()? != "cpu" {
+        return None;
+    }
+
+    Some(CpuSample {
+        user: fields.next()?.parse().ok()?,
+        nice: fields.next()?.parse().ok()?,
+        system: fields.next()?.parse().ok()?,
+        idle: fields.next()?.parse().ok()?,
+        iowait: fields.next()?.parse().ok()?,
+        irq: fields.next()?.parse().ok()?,
+        softirq: fields.next()?.parse().ok()?,
+        steal: fields.next()?.parse().ok()?,
+    })
+}
+
+fn calculate_util(previous: &CpuSample, current: &CpuSample) -> Option<f64> {
+    let user = current.user.checked_sub(previous.user)?;
+    let nice = current.nice.checked_sub(previous.nice)?;
+    let system = current.system.checked_sub(previous.system)?;
+    let idle = current.idle.checked_sub(previous.idle)?;
+    let iowait = current.iowait.checked_sub(previous.iowait)?;
+    let irq = current.irq.checked_sub(previous.irq)?;
+    let softirq = current.softirq.checked_sub(previous.softirq)?;
+    let steal = current.steal.checked_sub(previous.steal)?;
+
+    let total_delta = user
+        .checked_add(nice)?
+        .checked_add(system)?
+        .checked_add(idle)?
+        .checked_add(iowait)?
+        .checked_add(irq)?
+        .checked_add(softirq)?
+        .checked_add(steal)?;
+
+    if total_delta == 0 {
+        return None;
+    }
+
+    let idle_delta = idle.checked_add(iowait)?;
+    let busy_delta = total_delta.checked_sub(idle_delta)?;
+
+    Some((busy_delta as f64 / total_delta as f64) * 100.0)
+}
+
+fn collect_cpu_sample() -> Option<CpuSample> {
+    let stat = fs::read_to_string("/proc/stat").ok()?;
+    parse_cpu_sample(&stat)
+}
+
 fn derive_health(snapshot: &StatusSnapshot) -> OverallHealth {
     match snapshot.temperature {
         None => OverallHealth::Unknown,
@@ -282,6 +363,7 @@ fn main() {
         uptime: collect_uptime(),
         memory: collect_memory(),
         storage: collect_storage(),
+        cpu_usage: None,
         copyparty: collect_copyparty(),
         backup: BackupStatus::Checking,
     };
@@ -298,11 +380,21 @@ fn main() {
     let mut backup_command_running = true;
     let mut backup_times = Instant::now();
 
+    let mut previous_cpu = None;
+
     loop {
         status.temperature = collect_temperature();
         status.uptime = collect_uptime();
         status.memory = collect_memory();
 
+        let current_cpu = collect_cpu_sample();
+
+        status.cpu_usage = match (&previous_cpu, &current_cpu) {
+            (Some(previous), Some(current)) => calculate_util(previous, current),
+            _ => None,
+        };
+
+        previous_cpu = current_cpu;
         let received = rx.try_recv();
         match received {
             Ok(v) => {

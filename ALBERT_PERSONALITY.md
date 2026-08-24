@@ -57,6 +57,28 @@ Temperature controls eyebrows, mouth, and health message. Activity controls the 
 
 The face must be cute, fixed-size, and stable on screen. Slow facts—storage, backup age, and service status—remain visible but do not control the version-one face. No keyboard interaction, randomness, smooth sub-second animation, colour, or configuration file is required.
 
+### Approved milestone-two design
+
+Milestone 2 introduces Albert’s approved neutral appearance and the final telemetry layout. The telemetry responds to live observations, but the face stays exactly as shown: centered pupils, no blinking, no pupil movement, and no expression changes.
+
+```text
+┌─────────────────────────────────────────────────────┐
+│                                                     │
+│           ╭───────╮             ╭───────╮           │
+│           │   ●   │             │   ●   │           │
+│           ╰───────╯             ╰───────╯           │
+│                          ᴗ                          │
+│                        ╰───╯                        │
+│                                                     │
+│  TEMP 52°C · comfy        CPU 18% · relaxed         │
+│  RAM  46% ████░░░░░░     STORE 63% ██████░░░░       │
+│  DISK R 0.0 · W 2.4 MiB/s                           │
+│  UP 6h23m        COPY OK        BACKUP 3h ago       │
+└─────────────────────────────────────────────────────┘
+```
+
+The values are illustrative. The frame dimensions and field positions stay fixed while values refresh. Bars represent bounded capacity only, so RAM and storage use bars while temperature, CPU activity, and disk throughput do not. Disk focus is not written as a telemetry label; future facial behaviour may communicate it instead. Missing measurements must display an explicit compact unknown/unavailable value rather than a plausible zero.
+
 ## Design boundaries
 
 Keep these concepts separate even if they initially share `main.rs`:
@@ -92,9 +114,9 @@ Raw observations are facts; thresholds are policy; character state remembers pri
 
 **Complete when:** Albert redraws on schedule while a deliberately slow Restic check runs, slow commands run only at their cadence, Ctrl-C still stops the program, and `cargo fmt`, `cargo check`, and `cargo test` pass without warnings.
 
-## 2. Live CPU and disk activity
+## 2. Static Albert with live telemetry
 
-**Outcome:** The report visibly changes with real CPU and storage-disk activity, while the face remains unchanged.
+**Outcome:** The dashboard uses the approved fixed-size Albert design and telemetry layout. Every metric refreshes at its intended cadence, but Albert’s neutral face does not move or react yet.
 
 **Work:**
 
@@ -102,45 +124,22 @@ Raw observations are facts; thresholds are policy; character state remembers pri
 - Calculate CPU utilization from consecutive samples with safe delta arithmetic.
 - Identify and parse the `/proc/diskstats` row for Albert’s storage device.
 - Calculate read rate, write rate, combined throughput, and whether any I/O occurred.
-- Add current CPU and disk activity to the observed dashboard state and textual report.
-- Treat first samples, resets, zero elapsed work, and malformed files as unavailable.
-- Add focused parser/delta tests using short fixed input strings.
+- Add current CPU and disk activity to the observed dashboard state.
+- Render the approved centered face and telemetry card without changing its dimensions or field positions between frames.
+- Show temperature and CPU descriptors beside their live values, but do not connect them to the face.
+- Use capacity bars only for RAM and storage; show disk activity as read/write throughput with no `focused` label.
+- Keep the face completely static: no pupil movement, blinking, or expression changes.
+- Treat first samples, resets, zero elapsed work, malformed files, and missing measurements as unavailable rather than zero.
+- Add focused parser, delta, threshold, and formatting tests using short fixed inputs.
 
-**Rust lessons:** data modelling with structs, iterators and parsing, `Option`/`Result`, references versus ownership, integer arithmetic, previous/current state, pure functions, and unit tests.
+**Rust lessons:** data modelling with structs, iterators and parsing, `Option`/`Result`, references versus ownership, safe integer arithmetic, previous/current state, pure functions, fixed-width formatting.
 
-**Complete when:** CPU load changes under CPU work, disk activity changes during a real transfer to `/srv/storage`, idle values settle again, invalid sample tests pass, and the dashboard never panics.
+**Complete when:** Albert’s approved neutral face is centered and unchanged, all telemetry fits the stable card, CPU load changes under CPU work, disk rates change during a real transfer to `/srv/storage`, RAM and storage are the only bars, idle values settle again, unavailable values do not shift the layout, and all checks pass without panics or warnings.
 
-## 3. Cute reactive Albert
+## 3. TBD
 
-**Outcome:** A fixed-size cute face reacts immediately and predictably to temperature, CPU, and disk activity.
+To be decided after Milestone 2 is complete.
 
-**Work:**
+## 4. TBD
 
-- Model temperature mood, CPU energy, disk focus, and the composed expression with enums or similarly explicit types.
-- Derive those states using the version-one thresholds; keep policy outside collectors and rendering.
-- Design fixed-width face frames for comfortable, warm, alarmed, puzzled, relaxed, energetic, focused, and intensely focused combinations.
-- Render the face and one short personality message without shifting the metrics.
-- Enforce composition priority: dangerous heat, disk focus, CPU energy, then relaxed behaviour.
-- Test threshold boundaries and representative combinations as pure logic.
-
-**Rust lessons:** enums and exhaustive `match`, associated data, pure transformations, borrowing shared input, expression-oriented control flow, separation of concerns, and table-driven tests.
-
-**Complete when:** controlled CPU/disk activity and temperature fixtures select the expected face and message, real activity visibly changes Albert, the layout remains stable, and all checks pass.
-
-## 4. Persistent behaviour and Albert-ready finish
-
-**Outcome:** Albert feels alive rather than merely swapping icons, and the program is robust enough to run on the NAS.
-
-**Work:**
-
-- Add persistent character state for the idle eye cycle, high-CPU streak, and two-frame focus hold.
-- Advance the state once per completed two-second observation; avoid randomness and timing drift.
-- Keep thresholds, paths, device name, and cadences in clearly named constants.
-- Refine concise, cute messages without hiding warnings or unavailable data.
-- Split collection, personality, and rendering into modules only if this improves navigation.
-- Verify low idle CPU use, command cadence, terminal redraw, failure behaviour, and operation from any working directory on Albert.
-- Add tests for state transitions and create a final Git checkpoint.
-
-**Rust lessons:** finite-state machines, state transitions, invariants, methods and modules, visibility, deterministic testing, refactoring, and release builds.
-
-**Complete when:** Albert wanders while idle, focuses during and briefly after disk I/O, becomes energetic under CPU load, reacts clearly to heat, remains responsive during Restic checks, and runs successfully on Albert with `cargo build --release`.
+To be decided after Milestone 3 is defined.
