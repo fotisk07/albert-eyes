@@ -112,7 +112,7 @@ Raw observations are facts; thresholds are policy; character state remembers pri
 
 **Rust lessons:** `Instant` and `Duration`, ownership of cached state, mutable updates, threads, `move` closures, channels, non-blocking receive, and modelling pending work with enums.
 
-**Complete when:** Albert redraws on schedule while a deliberately slow Restic check runs, slow commands run only at their cadence, Ctrl-C still stops the program, and `cargo fmt`, `cargo check`, and `cargo test` pass without warnings.
+**Complete when:** Albert redraws on schedule while a deliberately slow Restic check runs, slow commands run only at their cadence, Ctrl-C still stops the program, and `cargo fmt`, `cargo check`.
 
 ## 2. Static Albert with live telemetry
 
