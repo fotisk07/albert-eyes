@@ -159,6 +159,7 @@ fn main() {
     // No baseline yet: first frame will show unavailable.
     let mut previous_disk: Option<(DiskSample, Instant)> = None;
 
+    print!("\x1B[2J");
     loop {
         status.temperature = collect::temperature();
         status.uptime = collect::uptime();
@@ -219,7 +220,7 @@ fn main() {
             storage_times = Instant::now();
         }
 
-        print!("\x1B[2J");
+        // print!("\x1B[2J");
         print!("\x1B[H");
 
         render(&status);
