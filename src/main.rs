@@ -226,7 +226,7 @@ fn main() {
         render(&status);
         let _ = std::io::stdout().flush();
 
-        let sleep_duration = time::Duration::from_secs(2);
+        let sleep_duration = time::Duration::from_secs(1);
         thread::sleep(sleep_duration);
     }
 }
