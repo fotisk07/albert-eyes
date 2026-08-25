@@ -25,8 +25,8 @@ fn bar(percent: f64) -> String {
 
 fn temperature_text(temperature: Option<i32>) -> String {
     match temperature {
-        Some(v) if v < 60 => format!("{:.0}°C · comfy", v),
-        Some(v) if v < 75 => format!("{:.0}°C · warm", v),
+        Some(v) if v < 70 => format!("{:.0}°C · comfy", v),
+        Some(v) if v < 80 => format!("{:.0}°C · warm", v),
         Some(v) => format!("{:.0}°C · alarmed", v),
         None => String::from("-- · puzzled"),
     }
@@ -34,8 +34,8 @@ fn temperature_text(temperature: Option<i32>) -> String {
 
 fn cpu_text(cpu_usage: Option<f64>) -> String {
     match cpu_usage {
-        Some(v) if v < 30.0 => format!("{:.0}% · relaxed", v),
-        Some(v) if v < 70.0 => format!("{:.0}% · awake", v),
+        Some(v) if v < 20.0 => format!("{:.0}% · relaxed", v),
+        Some(v) if v <= 70.0 => format!("{:.0}% · awake", v),
         Some(v) => format!("{:.0}% · energetic", v),
         None => String::from("-- · unknown"),
     }
@@ -71,8 +71,8 @@ fn backup_text(status: &BackupStatus) -> String {
         BackupStatus::Stale { age_hours } => {
             format!("BACKUP STALE {}h", age_hours)
         }
-        BackupStatus::Unavailable => String::from("BACKUP --"),
-        BackupStatus::Checking => String::from("BACKUP ..."),
+        BackupStatus::Unavailable => String::from("BACKUP N/A"),
+        BackupStatus::Checking => String::from("BACKUP Checking..."),
     }
 }
 
@@ -90,9 +90,9 @@ pub fn render(snapshot: &StatusSnapshot) {
         _ => String::from("-- ----------"),
     };
 
-    let storage = match &snapshot.storage {
+    let storage = match snapshot.storage {
         Some(v) => {
-            let percent = (v.percent_used as f64).clamp(0.0, 100.0);
+            let percent = (v as f64).clamp(0.0, 100.0);
             format!("{:.0}% {}", percent, bar(percent))
         }
         None => String::from("-- ----------"),
@@ -110,6 +110,7 @@ pub fn render(snapshot: &StatusSnapshot) {
     println!("┌{}┐", "─".repeat(INNER_WIDTH));
 
     // Reserved face area.
+    row("");
     row("           ╭───────╮             ╭───────╮           ");
     row("           │   ●   │             │   ●   │           ");
     row("           ╰───────╯             ╰───────╯           ");

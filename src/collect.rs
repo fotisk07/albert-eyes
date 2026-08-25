@@ -10,7 +10,7 @@ use chrono::{DateTime, Utc};
 use std::process::Command;
 use std::{fs, time};
 
-use crate::{BackupStatus, CpStatus, CpuSample, DiskSample, MemoryUsage, StorageUsage, Uptime};
+use crate::{BackupStatus, CpStatus, CpuSample, DiskSample, MemoryUsage, Uptime};
 
 const ALBERT_DISK_DEVICE: &str = "sda1";
 
@@ -68,9 +68,7 @@ pub fn memory() -> Option<MemoryUsage> {
 
 // STORAGE
 
-pub fn storage() -> Option<StorageUsage> {
-    const BYTES_PER_GIB: f64 = 1_073_741_824.0;
-
+pub fn storage() -> Option<u8> {
     let output = Command::new("df")
         .args([
             "--output=size,used,avail,pcent,target",
@@ -88,15 +86,7 @@ pub fn storage() -> Option<StorageUsage> {
     let line = text.lines().nth(1)?;
     let parts: Vec<&str> = line.split_whitespace().collect();
 
-    let total_bytes = parts.first()?.parse::<u64>().ok()?;
-    let used_bytes = parts.get(1)?.parse::<u64>().ok()?;
-    let percent_used = parts.get(3)?.trim_end_matches('%').parse::<u8>().ok()?;
-
-    Some(StorageUsage {
-        used_gib: used_bytes as f64 / BYTES_PER_GIB,
-        total_gib: total_bytes as f64 / BYTES_PER_GIB,
-        percent_used,
-    })
+    parts.get(3)?.trim_end_matches('%').parse::<u8>().ok()
 }
 
 // COPYPARTY

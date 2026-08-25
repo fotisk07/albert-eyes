@@ -27,11 +27,6 @@ struct DiskSample {
     sectors_written: u64,
 }
 
-struct StorageUsage {
-    used_gib: f64,
-    total_gib: f64,
-    percent_used: u8,
-}
 enum CpStatus {
     Running,
     Stopped,
@@ -48,8 +43,6 @@ enum BackupStatus {
 struct DiskActivity {
     read_mib_s: f64,
     write_mib_s: f64,
-    combined_mib_s: f64,
-    active: bool,
 }
 struct CpuSample {
     user: u64,
@@ -66,7 +59,7 @@ struct StatusSnapshot {
     temperature: Option<i32>,
     uptime: Option<Uptime>,
     memory: Option<MemoryUsage>,
-    storage: Option<StorageUsage>,
+    storage: Option<u8>,
     cpu_usage: Option<f64>,
     copyparty: CpStatus,
     backup: BackupStatus,
@@ -99,15 +92,9 @@ fn calculate_disk_activity(
     let read_mib_s = read_bytes / BYTES_PER_MIB / elapsed_secs;
     let write_mib_s = write_bytes / BYTES_PER_MIB / elapsed_secs;
 
-    let combined_mib_s = read_mib_s + write_mib_s;
-
-    let active = read_sector_delta > 0 || write_sector_delta > 0;
-
     Some(DiskActivity {
         read_mib_s,
         write_mib_s,
-        combined_mib_s,
-        active,
     })
 }
 
