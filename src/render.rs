@@ -4,6 +4,9 @@ use std::fmt::Write;
 const CARD_WIDTH: usize = 55;
 const INNER_WIDTH: usize = CARD_WIDTH - 2;
 const BAR_WIDTH: usize = 10;
+const EYE_SEPARATION: usize = 13;
+const EYE_WIDTH: usize = 9;
+const EYE_WALL_DISTANCE: usize = (INNER_WIDTH - 2 * EYE_WIDTH - EYE_SEPARATION) / 2;
 
 struct Telemetry {
     temperature: String,
@@ -116,14 +119,30 @@ fn disk_text(disk: &Option<DiskActivity>) -> String {
     }
 }
 
+fn render_pupils() -> (String, String) {
+    let marker = 3;
+    let left: String = (0..7)
+        .map(|position| if position == marker { '●' } else { ' ' })
+        .collect();
+    let right: String = (0..7)
+        .map(|position| if position == marker { '●' } else { ' ' })
+        .collect();
+
+    (left, right)
+}
+
 fn create_head_str() -> String {
+    let wall = " ".repeat(EYE_WALL_DISTANCE);
+    let sep = " ".repeat(EYE_SEPARATION);
+    let (lefti, right) = render_pupils();
+
     [
         row(""),
-        row("           ╭───────╮             ╭───────╮"),
-        row("           │   ●   │             │   ●   │"),
-        row("           ╰───────╯             ╰───────╯"),
-        row("                          ᴗ               "),
-        row("                        ╰───╯             "),
+        row(&format!("{wall}╭───────╮{sep}╭───────╮")),
+        row(&format!("{wall}│{right}│{sep}│{lefti}│")),
+        row(&format!("{wall}╰───────╯{sep}╰───────╯")),
+        row(&format!("{}ᴗ", " ".repeat(INNER_WIDTH / 2))),
+        row(&format!("{}╰───╯", " ".repeat((INNER_WIDTH - 5) / 2))),
         row(""),
     ]
     .join("\n")
