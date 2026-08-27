@@ -1,16 +1,28 @@
-use crate::{BackupStatus, CpStatus, StatusSnapshot};
+use crate::{BackupStatus, CpStatus, DiskActivity, MemoryUsage, StatusSnapshot};
+use std::fmt::Write;
 
 const CARD_WIDTH: usize = 55;
 const INNER_WIDTH: usize = CARD_WIDTH - 2;
 const BAR_WIDTH: usize = 10;
 
+struct Telemetry {
+    temperature: String,
+    cpu: String,
+    storage: String,
+    ram: String,
+    disk: String,
+    uptime: String,
+    copyparty: String,
+    backup: String,
+}
+
 fn bounded(text: &str, max_width: usize) -> String {
     text.chars().take(max_width).collect()
 }
 
-fn row(content: &str) {
+fn row(content: &str) -> String {
     let content = bounded(content, INNER_WIDTH);
-    println!("│{:<53}│", content);
+    format!("│{:<53}│", content)
 }
 
 fn bar(percent: f64) -> String {
@@ -54,12 +66,12 @@ fn uptime_text(snapshot: &StatusSnapshot) -> String {
     }
 }
 
-fn copyparty_text(status: &CpStatus) -> &'static str {
+fn copyparty_text(status: &CpStatus) -> String {
     match status {
-        CpStatus::Running => "COPY OK",
-        CpStatus::Stopped => "COPY STOP",
-        CpStatus::Failed => "COPY FAIL",
-        CpStatus::Unknown => "COPY ?",
+        CpStatus::Running => format!("COPY OK"),
+        CpStatus::Stopped => format!("COPY STOP"),
+        CpStatus::Failed => format!("COPY FAIL"),
+        CpStatus::Unknown => format!("COPY ?"),
     }
 }
 
@@ -76,11 +88,8 @@ fn backup_text(status: &BackupStatus) -> String {
     }
 }
 
-pub fn render(snapshot: &StatusSnapshot) {
-    let temperature = temperature_text(snapshot.temperature);
-    let cpu = cpu_text(snapshot.cpu_usage);
-
-    let ram = match &snapshot.memory {
+fn ram_text(memory: &Option<MemoryUsage>) -> String {
+    match memory {
         Some(v) if v.total > 0 => {
             let percent = (v.used as f64 / v.total as f64) * 100.0;
             let percent = percent.clamp(0.0, 100.0);
@@ -88,56 +97,74 @@ pub fn render(snapshot: &StatusSnapshot) {
             format!("{:.0}% {}", percent, bar(percent))
         }
         _ => String::from("-- ----------"),
-    };
+    }
+}
 
-    let storage = match snapshot.storage {
+fn storage_text(storage: &Option<u8>) -> String {
+    match storage {
         Some(v) => {
-            let percent = (v as f64).clamp(0.0, 100.0);
+            let percent = (*v as f64).clamp(0.0, 100.0);
             format!("{:.0}% {}", percent, bar(percent))
         }
         None => String::from("-- ----------"),
-    };
-
-    let disk = match &snapshot.disk_activity {
+    }
+}
+fn disk_text(disk: &Option<DiskActivity>) -> String {
+    match disk {
         Some(v) => format!("DISK R {:.1} · W {:.1} MiB/s", v.read_mib_s, v.write_mib_s),
         None => String::from("DISK R -- · W -- MiB/s"),
+    }
+}
+
+fn create_head_str() -> String {
+    [
+        row(""),
+        row("           ╭───────╮             ╭───────╮"),
+        row("           │   ●   │             │   ●   │"),
+        row("           ╰───────╯             ╰───────╯"),
+        row("                          ᴗ               "),
+        row("                        ╰───╯             "),
+        row(""),
+    ]
+    .join("\n")
+}
+
+fn create_tm_text(snapshot: &Telemetry) -> String {
+    [
+        row(&format!(
+            "  TEMP {:<20} CPU {}",
+            snapshot.temperature, snapshot.cpu
+        )),
+        row(&format!(
+            "  RAM  {:<19} STORE {}",
+            snapshot.ram, snapshot.storage
+        )),
+        row(&format!("  {}", snapshot.disk)),
+        row(&format!(
+            "  UP {:<12} {:<14} {}",
+            snapshot.uptime, snapshot.copyparty, snapshot.backup
+        )),
+    ]
+    .join("\n")
+}
+
+pub fn render(snapshot: &StatusSnapshot) -> String {
+    let telemetry_text = Telemetry {
+        temperature: temperature_text(snapshot.temperature),
+        cpu: cpu_text(snapshot.cpu_usage),
+        storage: storage_text(&snapshot.storage),
+        ram: ram_text(&snapshot.memory),
+        disk: disk_text(&snapshot.disk_activity),
+        uptime: uptime_text(snapshot),
+        copyparty: copyparty_text(&snapshot.copyparty),
+        backup: backup_text(&snapshot.backup),
     };
 
-    let uptime = uptime_text(snapshot);
-    let copyparty = copyparty_text(&snapshot.copyparty);
-    let backup = backup_text(&snapshot.backup);
+    let mut report = String::new();
+    let _ = writeln!(&mut report, "┌{}┐", "─".repeat(INNER_WIDTH));
+    let _ = writeln!(&mut report, "{}", create_head_str());
+    let _ = writeln!(&mut report, "{}", create_tm_text(&telemetry_text));
+    let _ = writeln!(&mut report, "└{}┘", "─".repeat(INNER_WIDTH));
 
-    println!("┌{}┐", "─".repeat(INNER_WIDTH));
-
-    // Reserved face area.
-    row("");
-    row("           ╭───────╮             ╭───────╮           ");
-    row("           │   ●   │             │   ●   │           ");
-    row("           ╰───────╯             ╰───────╯           ");
-    row("                          ᴗ                          ");
-    row("                        ╰───╯                        ");
-    row("");
-
-    row(&format!(
-        "  TEMP {:<20} CPU {}",
-        bounded(&temperature, 20),
-        bounded(&cpu, 20)
-    ));
-
-    row(&format!(
-        "  RAM  {:<19} STORE {}",
-        bounded(&ram, 19),
-        bounded(&storage, 19)
-    ));
-
-    row(&format!("  {}", disk));
-
-    row(&format!(
-        "  UP {:<12} {:<14} {}",
-        bounded(&uptime, 12),
-        copyparty,
-        bounded(&backup, 20)
-    ));
-
-    println!("└{}┘", "─".repeat(INNER_WIDTH));
+    return report;
 }

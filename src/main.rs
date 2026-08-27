@@ -220,10 +220,8 @@ fn main() {
             storage_times = Instant::now();
         }
 
-        // print!("\x1B[2J");
-        print!("\x1B[H");
+        print!("\x1B[H{}", render(&status));
 
-        render(&status);
         let _ = std::io::stdout().flush();
 
         let sleep_duration = time::Duration::from_secs(1);

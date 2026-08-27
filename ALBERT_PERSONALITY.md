@@ -136,10 +136,34 @@ Raw observations are facts; thresholds are policy; character state remembers pri
 
 **Complete when:** Albert’s approved neutral face is centered and unchanged, all telemetry fits the stable card, CPU load changes under CPU work, disk rates change during a real transfer to `/srv/storage`, RAM and storage are the only bars, idle values settle again, unavailable values do not shift the layout, and all checks pass without panics or warnings.
 
-## 3. TBD
+## 3. Frame renderer with moving eyes
 
-To be decided after Milestone 2 is complete.
+**Outcome:** Albert’s pupils move together through a deterministic left → center → right → center loop. Rendering produces one complete 55×13 frame before it is written to the terminal, while telemetry and every other facial feature continue to behave exactly as they did in Milestone 2.
+
+**Visual rule:**
+
+```text
+left      center      right
+│ ●     │  │   ●   │  │     ● │
+```
+
+Each eye keeps a seven-character interior. The animation maps its four phases to horizontal pupil positions `1 → 3 → 5 → 3`, or an equivalent bounded representation. The two center phases look identical but remain distinct points in the cycle.
+
+**Work:**
+
+- Refactor rendering so it builds and returns one complete frame instead of printing individual rows.
+- Keep face-row construction separate from telemetry-row formatting.
+- Generate each pupil row from a bounded horizontal position while leaving the eye outlines as readable static templates.
+- Represent the repeating animation as four persistent phases: left, center-after-left, right, and center-after-right.
+- Advance the phase once per completed redraw and move both pupils together.
+- Write the cursor-positioning sequence and completed frame as one output operation, then flush.
+- Preserve the approved 55×13 dimensions, telemetry positions, explicit unavailable values, collection cadences, and background Restic behaviour.
+- Do not add blinking, independent eye movement, randomness, keyboard control, facial reactions to telemetry, a general-purpose drawing canvas, or an LCD driver yet.
+
+**Rust lessons:** persistent state across loop iterations, enums or bounded indices, deterministic state transitions, string construction, `std::fmt::Write`, separating frame generation from output, borrowing observations during rendering, and keeping dynamic components inside fixed geometry.
+
+**Complete when:** Albert repeatedly looks left, center, right, and center with both pupils moving together; every generated frame remains exactly 55 characters by 13 lines; telemetry continues to refresh without shifting; missing telemetry does not stop the animation; the terminal receives a complete frame rather than row-by-row rendering; Ctrl-C still works; and `cargo fmt`, `cargo check`, and `cargo test` pass without warnings.
 
 ## 4. TBD
 
-To be decided after Milestone 3 is defined.
+To be decided after Milestone 3 is complete.
