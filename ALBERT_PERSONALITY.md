@@ -2,7 +2,7 @@
 
 ## Goal
 
-Turn Albert Eyes into a cute, reactive terminal character for the Albert NAS. Albert reacts only to system activity: temperature sets his mood, disk I/O sets his focus, and CPU usage sets his energy. The dashboard remains useful, redraws every two seconds, survives missing data, and never waits for Restic during a frame.
+Turn Albert Eyes into a cute, reactive terminal character for the Albert NAS. Albert reacts to system activity and remains naturally animated while the NAS is quiet. The dashboard survives missing data, renders independently from telemetry collection, and never waits for Restic during a frame.
 
 This plan extends the completed dashboard milestones in `MILESTONES.md`. The owner writes every line of Rust; implementation should optimize for learning, clarity, and visible progress rather than speed or abstraction.
 
@@ -12,10 +12,11 @@ This plan extends the completed dashboard milestones in `MILESTONES.md`. The own
 
 | Work | Cadence | Rule |
 |---|---:|---|
-| Redraw; temperature, CPU, disk, uptime, memory | 2 s | Cheap file reads may run in the refresh path. |
-| Copyparty status | 30 s | Display the most recent result between checks. |
+| Advance animation and redraw | 200 ms | Rendering uses cached state and never initiates slow work. |
+| Temperature, CPU, disk, uptime, memory | 1 s | Refresh together and retain the latest observations between collections. |
 | Storage usage | 60 s | Informational; it does not animate the face. |
-| Restic snapshots | 10 min | Run away from the refresh path; show `Checking…` until the first result and retain the latest completed result. Never overlap checks. |
+| Copyparty status | 2 min | Display the most recent result between checks. |
+| Restic snapshots | 5 min | Run away from the refresh path; show `Checking…` until the first result and retain the latest completed result. Never overlap checks. |
 
 A failed refresh becomes an explicit unavailable/unknown value; it must not erase unrelated valid data or crash the dashboard.
 
@@ -52,10 +53,10 @@ Temperature controls eyebrows, mouth, and health message. Activity controls the 
 1. Dangerous heat overrides normal eye behaviour with an alarmed face.
 2. Disk activity centers the pupils; intense activity strengthens the focused expression.
 3. Without disk activity, CPU usage controls eye openness and energy.
-4. When relaxed, the pupils follow a deterministic cycle: left → center → right → center → blink → center.
+4. When relaxed, bounded random decisions choose natural gaze targets, dwell times, and occasional blinks; pupils move one character per animation tick rather than jumping.
 5. Focus remains for two frames after disk activity ends, preventing flicker.
 
-The face must be cute, fixed-size, and stable on screen. Slow facts—storage, backup age, and service status—remain visible but do not control the version-one face. No keyboard interaction, randomness, smooth sub-second animation, colour, or configuration file is required.
+The face must be cute, fixed-size, and stable on screen. Slow facts—storage, backup age, and service status—remain visible but do not control the version-one face. Randomness affects only completed idle-behaviour decisions, never raw telemetry or every-frame pupil positions. No keyboard interaction, independent eye movement, colour, or configuration file is required.
 
 ### Approved milestone-two design
 
@@ -164,6 +165,44 @@ Each eye keeps a seven-character interior. The animation maps its four phases to
 
 **Complete when:** Albert repeatedly looks left, center, right, and center with both pupils moving together; every generated frame remains exactly 55 characters by 13 lines; telemetry continues to refresh without shifting; missing telemetry does not stop the animation; the terminal receives a complete frame rather than row-by-row rendering; Ctrl-C still works; and `cargo fmt`, `cargo check`, and `cargo test` pass without warnings.
 
-## 4. TBD
+## 4. Natural idle animation and independent scheduling
 
-To be decided after Milestone 3 is complete.
+**Outcome:** Albert remains lively on a quiet NAS. He chooses bounded gaze targets and dwell times, moves both pupils smoothly one character at a time, and occasionally blinks. The animation redraws at five frames per second while telemetry and slow facts continue to refresh only at their own cadences.
+
+**Behaviour:**
+
+- Keep both pupils together within horizontal positions `1..=5`.
+- Usually dwell near the center; occasionally choose left or right.
+- Move at most one character toward the target on each 200 ms animation tick.
+- Hold the chosen gaze for a bounded random duration before choosing another action.
+- Blink occasionally for a short, fixed number of animation ticks, then reopen at the previous or centered gaze.
+- Consult randomness only when the current idle action completes. Never choose a new pupil position independently on every frame.
+- Seed and generate idle decisions with the `rand` crate; randomness does not affect telemetry values, collection timing, or frame geometry.
+
+**Scheduling:**
+
+```text
+200 ms   advance idle animation and render cached state
+1 s      collect temperature, CPU, disk, uptime, and memory
+60 s     collect storage usage
+2 min    collect Copyparty status
+5 min    start a Restic check if none is running
+```
+
+All scheduling uses monotonic `Instant` deadlines or elapsed durations. A fast animation tick must not cause extra telemetry reads or command executions. Completed Restic results continue to arrive through the existing non-blocking channel, and Restic checks never overlap.
+
+**Work:**
+
+- Add `rand` as the first dependency used specifically for personality behaviour.
+- Introduce persistent idle-animation state containing the current pupil position, target position, current action, and the action’s deadline or remaining ticks.
+- Represent moving, dwelling, and blinking as explicit states rather than unrelated booleans.
+- Advance animation independently from observation collection.
+- Add a separate due time for the one-second cheap-telemetry refresh and update CPU/disk rates only from those one-second samples.
+- Change Copyparty and Restic to the approved two-minute and five-minute cadences while preserving their cached values.
+- Keep frame generation pure: rendering receives cached observations and animation state but performs no collection or random decisions.
+- Preserve the 55×13 frame, one-write terminal output, unavailable values, Ctrl-C behaviour, and low CPU usage while waiting.
+- Do not add system-activity facial reactions, independent eyes, mouth movement, colour, keyboard controls, a general-purpose canvas, or an LCD driver yet.
+
+**Rust lessons:** independent clocks with `Instant` and `Duration`, state-machine enums, bounded random ranges and weighted choices, dependency use, ownership of a random-number generator and animation state, moving one value toward another safely, cached observations, and separating update logic from pure rendering.
+
+**Complete when:** Albert’s idle movement no longer repeats a short fixed loop; pupils move one character at a time and never leave their eye interiors; center is visibly more common than side glances; blinks are brief and occasional rather than continuous; animation remains responsive while telemetry and commands run only at their documented cadences; Restic checks never overlap or block a frame; every frame remains 55×13; missing telemetry does not stop the personality; Ctrl-C works; and `cargo fmt`, `cargo check`, and `cargo test` pass without warnings.
