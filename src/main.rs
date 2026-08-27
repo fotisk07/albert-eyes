@@ -11,6 +11,8 @@ const COPYPARTY_UPDATE: u64 = 30;
 const STORAGE_UPDATE: u64 = 60;
 const BACKUP_UPDATE_SECS: u64 = 600;
 
+const PUPIL_POSITIONS: [usize; 4] = [1, 3, 5, 3];
+
 struct Uptime {
     days: u64,
     hours: u64,
@@ -159,6 +161,8 @@ fn main() {
     // No baseline yet: first frame will show unavailable.
     let mut previous_disk: Option<(DiskSample, Instant)> = None;
 
+    let mut pupil_index = 0;
+
     print!("\x1B[2J");
     loop {
         status.temperature = collect::temperature();
@@ -220,8 +224,8 @@ fn main() {
             storage_times = Instant::now();
         }
 
-        print!("\x1B[H{}", render(&status));
-
+        print!("\x1B[H{}", render(&status, PUPIL_POSITIONS[pupil_index]));
+        pupil_index = (pupil_index + 1) % PUPIL_POSITIONS.len();
         let _ = std::io::stdout().flush();
 
         let sleep_duration = time::Duration::from_secs(1);

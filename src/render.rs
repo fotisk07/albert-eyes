@@ -119,22 +119,21 @@ fn disk_text(disk: &Option<DiskActivity>) -> String {
     }
 }
 
-fn render_pupils() -> (String, String) {
-    let marker = 3;
+fn render_pupils(pupil_pos: usize) -> (String, String) {
     let left: String = (0..7)
-        .map(|position| if position == marker { '●' } else { ' ' })
+        .map(|position| if pupil_pos == position { '●' } else { ' ' })
         .collect();
     let right: String = (0..7)
-        .map(|position| if position == marker { '●' } else { ' ' })
+        .map(|position| if pupil_pos == position { '●' } else { ' ' })
         .collect();
 
     (left, right)
 }
 
-fn create_head_str() -> String {
+fn create_head_str(pupil_pos: usize) -> String {
     let wall = " ".repeat(EYE_WALL_DISTANCE);
     let sep = " ".repeat(EYE_SEPARATION);
-    let (lefti, right) = render_pupils();
+    let (lefti, right) = render_pupils(pupil_pos);
 
     [
         row(""),
@@ -167,7 +166,7 @@ fn create_tm_text(snapshot: &Telemetry) -> String {
     .join("\n")
 }
 
-pub fn render(snapshot: &StatusSnapshot) -> String {
+pub fn render(snapshot: &StatusSnapshot, pupil_pos: usize) -> String {
     let telemetry_text = Telemetry {
         temperature: temperature_text(snapshot.temperature),
         cpu: cpu_text(snapshot.cpu_usage),
@@ -181,7 +180,7 @@ pub fn render(snapshot: &StatusSnapshot) -> String {
 
     let mut report = String::new();
     let _ = writeln!(&mut report, "┌{}┐", "─".repeat(INNER_WIDTH));
-    let _ = writeln!(&mut report, "{}", create_head_str());
+    let _ = writeln!(&mut report, "{}", create_head_str(pupil_pos));
     let _ = writeln!(&mut report, "{}", create_tm_text(&telemetry_text));
     let _ = writeln!(&mut report, "└{}┘", "─".repeat(INNER_WIDTH));
 
