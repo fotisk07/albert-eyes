@@ -4,12 +4,14 @@ use crate::render::render;
 
 use std::io::Write;
 use std::sync::mpsc;
+use std::thread;
 use std::time::{Duration, Instant};
-use std::{thread, time};
 
-const COPYPARTY_UPDATE: u64 = 30;
-const STORAGE_UPDATE: u64 = 60;
-const BACKUP_UPDATE_SECS: u64 = 600;
+const RENDER_UPDATE_MSECS: u64 = 200;
+const TUM_DIC_UPDATE_SECS: u64 = 1;
+const STORAGE_UPDATE_SECS: u64 = 60;
+const COPYPARTY_UPDATE_SECS: u64 = 120;
+const BACKUP_UPDATE_SECS: u64 = 300;
 
 const PUPIL_POSITIONS: [usize; 4] = [1, 3, 5, 3];
 
@@ -173,7 +175,7 @@ fn main() {
 
     print!("\x1B[2J");
     loop {
-        if timing.tum_dic.elapsed() >= Duration::from_secs(1) {
+        if timing.tum_dic.elapsed() >= Duration::from_secs(TUM_DIC_UPDATE_SECS) {
             status.temperature = collect::temperature();
             status.uptime = collect::uptime();
             status.memory = collect::memory();
@@ -200,11 +202,11 @@ fn main() {
             timing.tum_dic = Instant::now()
         };
 
-        if timing.copyparty.elapsed() >= Duration::from_secs(COPYPARTY_UPDATE) {
+        if timing.copyparty.elapsed() >= Duration::from_secs(COPYPARTY_UPDATE_SECS) {
             status.copyparty = collect::copyparty();
             timing.copyparty = Instant::now();
         }
-        if timing.storage.elapsed() >= Duration::from_secs(STORAGE_UPDATE) {
+        if timing.storage.elapsed() >= Duration::from_secs(STORAGE_UPDATE_SECS) {
             status.storage = collect::storage();
             timing.storage = Instant::now();
         }
@@ -234,7 +236,6 @@ fn main() {
         pupil_index = (pupil_index + 1) % PUPIL_POSITIONS.len();
         let _ = std::io::stdout().flush();
 
-        let sleep_duration = time::Duration::from_secs(1);
-        thread::sleep(sleep_duration);
+        thread::sleep(Duration::from_millis(RENDER_UPDATE_MSECS));
     }
 }
