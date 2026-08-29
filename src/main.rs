@@ -129,6 +129,13 @@ fn calculate_util(previous: &CpuSample, current: &CpuSample) -> Option<f64> {
     Some((busy_delta as f64 / total_delta as f64) * 100.0)
 }
 
+struct Timers {
+    tum_dic: Instant, // temperature, uptime, memory, disk ,cpu
+    copyparty: Instant,
+    storage: Instant,
+    backup: Instant,
+}
+
 fn main() {
     // initialization
     let mut status = StatusSnapshot {
@@ -142,11 +149,15 @@ fn main() {
         backup: BackupStatus::Checking,
     };
 
-    let mut copyparty_times = Instant::now();
-    let mut storage_times = Instant::now();
+    let mut timing = Timers {
+        tum_dic: Instant::now(),
+        copyparty: Instant::now(),
+        storage: Instant::now(),
+        backup: Instant::now(),
+    };
 
+    // Get backup command spawning
     let (tx, rx) = mpsc::channel();
-
     let worker_sender = tx.clone();
     thread::spawn(move || {
         let val = collect::backup();
@@ -154,45 +165,49 @@ fn main() {
     });
 
     let mut backup_command_running = true;
-    let mut backup_times = Instant::now();
 
     let mut previous_cpu = None;
-
-    // No baseline yet: first frame will show unavailable.
     let mut previous_disk: Option<(DiskSample, Instant)> = None;
 
     let mut pupil_index = 0;
 
     print!("\x1B[2J");
     loop {
-        status.temperature = collect::temperature();
-        status.uptime = collect::uptime();
-        status.memory = collect::memory();
+        if timing.tum_dic.elapsed() >= Duration::from_secs(1) {
+            status.temperature = collect::temperature();
+            status.uptime = collect::uptime();
+            status.memory = collect::memory();
 
-        // CPU
-        let current_cpu = collect::cpu_sample();
+            let current_cpu = collect::cpu_sample();
+            status.cpu_usage = match (&previous_cpu, &current_cpu) {
+                (Some(previous), Some(current)) => calculate_util(previous, current),
+                _ => None,
+            };
+            previous_cpu = current_cpu;
+            let current_disk = collect::disk_sample();
+            let current_disk_time = Instant::now();
 
-        status.cpu_usage = match (&previous_cpu, &current_cpu) {
-            (Some(previous), Some(current)) => calculate_util(previous, current),
-            _ => None,
+            status.disk_activity = match (&previous_disk, &current_disk) {
+                (Some((previous, previous_time)), Some(current)) => {
+                    let elapsed = current_disk_time.duration_since(*previous_time);
+                    calculate_disk_activity(previous, current, elapsed)
+                }
+                _ => None,
+            };
+            // If collection failed, this becomes None and resets the baseline.
+            previous_disk = current_disk.map(|sample| (sample, current_disk_time));
+
+            timing.tum_dic = Instant::now()
         };
 
-        previous_cpu = current_cpu;
-
-        // Disk
-        let current_disk = collect::disk_sample();
-        let current_disk_time = Instant::now();
-
-        status.disk_activity = match (&previous_disk, &current_disk) {
-            (Some((previous, previous_time)), Some(current)) => {
-                let elapsed = current_disk_time.duration_since(*previous_time);
-                calculate_disk_activity(previous, current, elapsed)
-            }
-            _ => None,
-        };
-
-        // If collection failed, this becomes None and resets the baseline.
-        previous_disk = current_disk.map(|sample| (sample, current_disk_time));
+        if timing.copyparty.elapsed() >= Duration::from_secs(COPYPARTY_UPDATE) {
+            status.copyparty = collect::copyparty();
+            timing.copyparty = Instant::now();
+        }
+        if timing.storage.elapsed() >= Duration::from_secs(STORAGE_UPDATE) {
+            status.storage = collect::storage();
+            timing.storage = Instant::now();
+        }
 
         let received = rx.try_recv();
         match received {
@@ -201,7 +216,7 @@ fn main() {
                 backup_command_running = false;
             }
             Err(_) => {
-                if backup_times.elapsed() >= Duration::from_secs(BACKUP_UPDATE_SECS)
+                if timing.backup.elapsed() >= Duration::from_secs(BACKUP_UPDATE_SECS)
                     && !backup_command_running
                 {
                     let worker_sender = tx.clone();
@@ -210,18 +225,9 @@ fn main() {
                         let _ = worker_sender.send(val);
                     });
                     backup_command_running = true;
-                    backup_times = Instant::now();
+                    timing.backup = Instant::now();
                 }
             }
-        }
-
-        if copyparty_times.elapsed() >= Duration::from_secs(COPYPARTY_UPDATE) {
-            status.copyparty = collect::copyparty();
-            copyparty_times = Instant::now();
-        }
-        if storage_times.elapsed() >= Duration::from_secs(STORAGE_UPDATE) {
-            status.storage = collect::storage();
-            storage_times = Instant::now();
         }
 
         print!("\x1B[H{}", render(&status, PUPIL_POSITIONS[pupil_index]));
