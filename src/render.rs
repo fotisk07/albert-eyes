@@ -18,25 +18,25 @@ fn bar(percent: f64) -> String {
 
     format!("{}{}", "█".repeat(filled), "░".repeat(BAR_WIDTH - filled))
 }
+fn eye_content(pupils: PupilState) -> String {
+    if pupils.blinking {
+        "  ───  ".to_string()
+    } else {
+        (0..7)
+            .map(|i| if i == pupils.position { '●' } else { ' ' })
+            .collect()
+    }
+}
 
 fn head(pupils: PupilState) -> String {
     let wall = " ".repeat(EYE_WALL_DISTANCE);
     let sep = " ".repeat(EYE_SEPARATION);
 
-    let pupil: String = (0..7)
-        .map(|i| {
-            if pupils.visible && i == pupils.position {
-                '●'
-            } else {
-                ' '
-            }
-        })
-        .collect();
-
+    let eye = eye_content(pupils);
     [
         row(""),
         row(&format!("{wall}╭───────╮{sep}╭───────╮")),
-        row(&format!("{wall}│{pupil}│{sep}│{pupil}│")),
+        row(&format!("{wall}│{eye}│{sep}│{eye}│")),
         row(&format!("{wall}╰───────╯{sep}╰───────╯")),
         row(&format!("{}ᴗ", " ".repeat(INNER_WIDTH / 2))),
         row(&format!("{}╰───╯", " ".repeat((INNER_WIDTH - 5) / 2))),
