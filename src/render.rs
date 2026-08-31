@@ -4,7 +4,7 @@ const CARD_WIDTH: usize = 55;
 const INNER_WIDTH: usize = CARD_WIDTH - 2;
 const BAR_WIDTH: usize = 10;
 const EYE_SEPARATION: usize = 13;
-const EYE_WIDTH: usize = 9;
+const EYE_WIDTH: usize = 11;
 const EYE_WALL_DISTANCE: usize = (INNER_WIDTH - 2 * EYE_WIDTH - EYE_SEPARATION) / 2;
 
 fn row(content: &str) -> String {
@@ -18,13 +18,26 @@ fn bar(percent: f64) -> String {
 
     format!("{}{}", "█".repeat(filled), "░".repeat(BAR_WIDTH - filled))
 }
-fn eye_content(pupils: PupilState) -> String {
+
+fn eye_rows(pupils: PupilState) -> [String; 3] {
+    let inner_width = EYE_WIDTH - 2;
+
     if pupils.blinking {
-        "  ───  ".to_string()
+        [
+            " ".repeat(EYE_WIDTH),
+            format!("╰{}╯", "─".repeat(inner_width)),
+            " ".repeat(EYE_WIDTH),
+        ]
     } else {
-        (0..7)
+        let pupil: String = (0..inner_width)
             .map(|i| if i == pupils.position { '●' } else { ' ' })
-            .collect()
+            .collect();
+
+        [
+            format!("╭{}╮", "─".repeat(inner_width)),
+            format!("│{pupil}│"),
+            format!("╰{}╯", "─".repeat(inner_width)),
+        ]
     }
 }
 
@@ -32,12 +45,13 @@ fn head(pupils: PupilState) -> String {
     let wall = " ".repeat(EYE_WALL_DISTANCE);
     let sep = " ".repeat(EYE_SEPARATION);
 
-    let eye = eye_content(pupils);
+    let [eye_top, eye_middle, eye_bottom] = eye_rows(pupils);
+
     [
         row(""),
-        row(&format!("{wall}╭───────╮{sep}╭───────╮")),
-        row(&format!("{wall}│{eye}│{sep}│{eye}│")),
-        row(&format!("{wall}╰───────╯{sep}╰───────╯")),
+        row(&format!("{wall}{eye_top}{sep}{eye_top}")),
+        row(&format!("{wall}{eye_middle}{sep}{eye_middle}")),
+        row(&format!("{wall}{eye_bottom}{sep}{eye_bottom}")),
         row(&format!("{}ᴗ", " ".repeat(INNER_WIDTH / 2))),
         row(&format!("{}╰───╯", " ".repeat((INNER_WIDTH - 5) / 2))),
         row(""),
