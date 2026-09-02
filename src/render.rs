@@ -94,7 +94,7 @@ fn draw_face(
 
     let mouth = match pose.mouth {
         Mouth::Smile => "╰───╯",
-        Mouth::Happy => "╰─────╯",
+        Mouth::Happy => "╰─────────╯",
         Mouth::Relaxed => "╰─╯",
         Mouth::SmallO => "o",
         Mouth::Yawn => "◯",
@@ -161,6 +161,26 @@ fn draw_evening(scene: &mut [Vec<char>], pose: FacePose) {
     );
 }
 
+fn draw_excited(scene: &mut [Vec<char>], pose: FacePose) {
+    draw_face(
+        scene,
+        7,
+        0,
+        pose,
+        LARGE_EYE_INNER_WIDTH,
+        LARGE_EYE_SEPARATION,
+        5,
+    );
+
+    if pose.scene_frame == 0 {
+        put(scene, 2, 1, "✦");
+        put(scene, 42, 4, "*");
+    } else {
+        put(scene, 3, 4, "*");
+        put(scene, 41, 1, "✦");
+    }
+}
+
 fn draw_night(scene: &mut [Vec<char>], pose: FacePose) {
     draw_face(
         scene,
@@ -193,11 +213,15 @@ fn draw_night(scene: &mut [Vec<char>], pose: FacePose) {
 fn face(pose: FacePose) -> String {
     let mut scene = vec![vec![' '; FACE_WIDTH]; FACE_HEIGHT];
 
-    match pose.phase {
-        DayPhase::Morning => draw_morning(&mut scene, pose),
-        DayPhase::Day => draw_day(&mut scene, pose),
-        DayPhase::Evening => draw_evening(&mut scene, pose),
-        DayPhase::Night => draw_night(&mut scene, pose),
+    if pose.excited {
+        draw_excited(&mut scene, pose);
+    } else {
+        match pose.phase {
+            DayPhase::Morning => draw_morning(&mut scene, pose),
+            DayPhase::Day => draw_day(&mut scene, pose),
+            DayPhase::Evening => draw_evening(&mut scene, pose),
+            DayPhase::Night => draw_night(&mut scene, pose),
+        }
     }
 
     scene

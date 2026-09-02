@@ -60,11 +60,20 @@ fn collect_ram_percent() -> Option<u8> {
 }
 
 fn collect_backup_statuses() -> BackupStatuses {
-    BackupStatuses {
+    let mut statuses = BackupStatuses {
         xps_to_al: collect_backup_status(XPS_TO_AL_REPO, DAILY_BACKUP_STALE_HOURS),
         xps_to_bert: collect_backup_status(XPS_TO_BERT_REPO, WEEKDAY_BACKUP_STALE_HOURS),
         al_to_bert: collect_backup_status(AL_TO_BERT_REPO, DAILY_BACKUP_STALE_HOURS),
+    };
+
+    match std::env::var("ALBERT_EYES_BACKUP").as_deref() {
+        Ok("xps-to-al") => statuses.xps_to_al = BackupStatus::Running,
+        Ok("xps-to-bert") => statuses.xps_to_bert = BackupStatus::Running,
+        Ok("al-to-bert") => statuses.al_to_bert = BackupStatus::Running,
+        _ => {}
     }
+
+    statuses
 }
 
 fn collect_backup_status(repository: &str, stale_hours: u16) -> BackupStatus {

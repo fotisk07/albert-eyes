@@ -11,7 +11,7 @@ The four baseline scenes are:
 - **Evening:** no prop; Albert becomes sleepy, yawns, and briefly nods off.
 - **Night:** Albert sleeps under a soft nightcap while breathing and emitting drifting `Z`s.
 
-Backup excitement overrides the expression without discarding the current scene. Albert keeps the morning mug or nightcap while waking up, smiling broadly, and looking around more energetically.
+Backup excitement is a complete scene override. Albert drops the time-of-day props, opens large eyes, smiles broadly, and moves around energetically until the backup finishes.
 
 ## Principles
 
@@ -44,7 +44,7 @@ ALBERT_EYES_PHASE=evening cargo run
 ALBERT_EYES_PHASE=night cargo run
 ```
 
-Without the variable, Albert selects the phase from local time.
+Without the variable, Albert selects the phase from local time. Backup excitement can be previewed safely with `ALBERT_EYES_BACKUP=xps-to-al`, `xps-to-bert`, or `al-to-bert` without creating a fake Restic lock.
 
 ## Pose vocabulary
 
@@ -140,7 +140,7 @@ If any of the three backup paths is running, the animator temporarily replaces t
 - sleeping and yawning stop;
 - eyes open and move around with shorter pauses;
 - the mouth becomes a broad happy smile;
-- the underlying time-of-day scene remains recognizable.
+- coffee, nightcap, sleep, and other time-of-day details disappear for the duration of the backup.
 
 When the backup stops, Albert returns to the default behaviour for the current phase. A separate completion celebration can be added later if it proves useful.
 

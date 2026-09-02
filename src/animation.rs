@@ -53,6 +53,7 @@ pub struct FacePose {
     pub mouth: Mouth,
     pub vertical_offset: usize,
     pub scene_frame: u8,
+    pub excited: bool,
 }
 
 pub struct Animator {
@@ -159,6 +160,9 @@ impl Animator {
 
     fn choose_action(&mut self, now: Instant) -> Action {
         if self.backup_running {
+            self.pose.scene_frame = (self.pose.scene_frame + 1) % 2;
+            self.pose.vertical_offset = rand::random_range(0..=1);
+
             return match rand::random_range(0..10) {
                 0..3 => Action::Moving { target: PUPIL_LEFT },
                 3..6 => Action::Moving {
@@ -316,6 +320,7 @@ impl Animator {
             self.pose.eyes = EyeState::Open;
             self.pose.mouth = Mouth::Happy;
             self.pose.pupil_position = pupil_position;
+            self.pose.excited = true;
         } else if self.pose.phase != DayPhase::Night {
             self.pose.pupil_position = pupil_position;
         }
@@ -345,6 +350,7 @@ fn default_pose(phase: DayPhase) -> FacePose {
         mouth,
         vertical_offset: 0,
         scene_frame: 0,
+        excited: false,
     }
 }
 
