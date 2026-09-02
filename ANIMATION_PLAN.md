@@ -11,7 +11,7 @@ The four baseline scenes are:
 - **Evening:** no prop; Albert becomes sleepy, yawns, and briefly nods off.
 - **Night:** Albert sleeps under a soft nightcap while breathing and emitting drifting `Z`s.
 
-Backup excitement will later override the expression without discarding the current scene. It is intentionally postponed until the four baseline scenes look right.
+Backup excitement overrides the expression without discarding the current scene. Albert keeps the morning mug or nightcap while waking up, smiling broadly, and looking around more energetically.
 
 ## Principles
 
@@ -133,6 +133,17 @@ Sleep cycle:
 
 The movement should remain gentle and clearly different from blinking.
 
+## Backup-running override
+
+If any of the three backup paths is running, the animator temporarily replaces the normal phase behaviour:
+
+- sleeping and yawning stop;
+- eyes open and move around with shorter pauses;
+- the mouth becomes a broad happy smile;
+- the underlying time-of-day scene remains recognizable.
+
+When the backup stops, Albert returns to the default behaviour for the current phase. A separate completion celebration can be added later if it proves useful.
+
 ## Renderer work
 
 The renderer reserves one face canvas large enough for the nightcap and coffee cup. It provides reusable drawing operations for:
@@ -171,4 +182,4 @@ For each forced phase:
 - ensure the morning mug and nightcap are immediately recognisable;
 - tune motion only after seeing it in the real terminal.
 
-After all four scenes are accepted, backup-running detection can be passed into the animator and implemented as the next expression override.
+After the baseline scenes and running override are accepted, a brief backup-completion reaction can be considered separately.

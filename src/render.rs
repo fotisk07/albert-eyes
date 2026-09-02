@@ -94,6 +94,7 @@ fn draw_face(
 
     let mouth = match pose.mouth {
         Mouth::Smile => "╰───╯",
+        Mouth::Happy => "╰─────╯",
         Mouth::Relaxed => "╰─╯",
         Mouth::SmallO => "o",
         Mouth::Yawn => "◯",

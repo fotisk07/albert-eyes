@@ -21,7 +21,7 @@ fn main() {
             status = collect::collect_status();
             last_collection = time::Instant::now();
         }
-        animation.update();
+        animation.update(&status);
         print!("\x1B[H{}", render::render(&status, animation.pose()));
         let _ = std::io::stdout().flush();
         thread::sleep(time::Duration::from_millis(RENDER_UPDATE_MSECS));

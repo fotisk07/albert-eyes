@@ -1,3 +1,4 @@
+use crate::status::{AlbertStatus, BackupStatus};
 use chrono::{Local, Timelike};
 use std::env;
 use std::time::{Duration, Instant};
@@ -35,6 +36,7 @@ pub enum EyeState {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Mouth {
     Smile,
+    Happy,
     Relaxed,
     SmallO,
     Yawn,
@@ -57,6 +59,7 @@ pub struct Animator {
     pose: FacePose,
     action: Action,
     phase_override: Option<DayPhase>,
+    backup_running: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -99,6 +102,7 @@ impl Animator {
                 until: now + random_dwell(phase),
             },
             phase_override,
+            backup_running: false,
         }
     }
 
@@ -106,14 +110,17 @@ impl Animator {
         self.pose
     }
 
-    pub fn update(&mut self) {
+    pub fn update(&mut self, status: &AlbertStatus) {
         let now = Instant::now();
         let phase = self.phase_override.unwrap_or_else(current_phase);
+        let backup_running = has_running_backup(status);
 
-        if phase != self.pose.phase {
+        if phase != self.pose.phase || backup_running != self.backup_running {
+            self.backup_running = backup_running;
             self.pose = default_pose(phase);
+            self.restore_default_expression();
             self.action = Action::Dwelling {
-                until: now + random_dwell(phase),
+                until: now + self.random_dwell(),
             };
             return;
         }
@@ -126,7 +133,7 @@ impl Animator {
             Action::Blinking { until } if now >= until => {
                 self.restore_default_expression();
                 self.action = Action::Dwelling {
-                    until: now + random_dwell(self.pose.phase),
+                    until: now + self.random_dwell(),
                 };
             }
             Action::Sequence { kind, frame, until } if now >= until => {
@@ -145,12 +152,26 @@ impl Animator {
 
         if self.pose.pupil_position == target {
             self.action = Action::Dwelling {
-                until: now + random_dwell(self.pose.phase),
+                until: now + self.random_dwell(),
             };
         }
     }
 
     fn choose_action(&mut self, now: Instant) -> Action {
+        if self.backup_running {
+            return match rand::random_range(0..10) {
+                0..3 => Action::Moving { target: PUPIL_LEFT },
+                3..6 => Action::Moving {
+                    target: PUPIL_RIGHT,
+                },
+                6..9 => Action::Moving {
+                    target: PUPIL_CENTER,
+                },
+                9 => self.start_blink(now, 150),
+                _ => unreachable!(),
+            };
+        }
+
         match self.pose.phase {
             DayPhase::Morning => match rand::random_range(0..12) {
                 0..4 => Action::Moving {
@@ -214,7 +235,7 @@ impl Animator {
         if next_frame >= sequence_frame_count(kind) {
             self.restore_default_expression();
             self.action = Action::Dwelling {
-                until: now + random_dwell(self.pose.phase),
+                until: now + self.random_dwell(),
             };
             return;
         }
@@ -291,8 +312,20 @@ impl Animator {
         let pupil_position = self.pose.pupil_position;
         self.pose = default_pose(self.pose.phase);
 
-        if self.pose.phase != DayPhase::Night {
+        if self.backup_running {
+            self.pose.eyes = EyeState::Open;
+            self.pose.mouth = Mouth::Happy;
             self.pose.pupil_position = pupil_position;
+        } else if self.pose.phase != DayPhase::Night {
+            self.pose.pupil_position = pupil_position;
+        }
+    }
+
+    fn random_dwell(&self) -> Duration {
+        if self.backup_running {
+            Duration::from_millis(rand::random_range(200..600))
+        } else {
+            random_dwell(self.pose.phase)
         }
     }
 }
@@ -313,6 +346,12 @@ fn default_pose(phase: DayPhase) -> FacePose {
         vertical_offset: 0,
         scene_frame: 0,
     }
+}
+
+fn has_running_backup(status: &AlbertStatus) -> bool {
+    matches!(status.backups.xps_to_al, BackupStatus::Running)
+        || matches!(status.backups.xps_to_bert, BackupStatus::Running)
+        || matches!(status.backups.al_to_bert, BackupStatus::Running)
 }
 
 fn current_phase() -> DayPhase {
