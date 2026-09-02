@@ -1,10 +1,14 @@
-use crate::status::{DiskAvailability, DiskHealth, DiskStatus, PiStatus};
+use crate::status::{BackupStatus, BackupStatuses, DiskAvailability, DiskStatus, PiStatus};
 use std::path::Path;
+use std::time::{Duration, SystemTime};
 use std::{fs, process::Command};
 
-const RESTIC_REPO: &str = "/srv/storage/backups/fotis-xps/";
-const RESTIC_PASSWORD_FILE: &str = "/home/fotis/.config/albert-eyes/restic/restic-password";
-const BACKUP_STALE_HOURS: i64 = 48;
+const XPS_TO_AL_REPO: &str = "/srv/storage/backups/fotis-xps";
+const XPS_TO_BERT_REPO: &str = "/srv/recovery/computer-backups/fotis-xps";
+const AL_TO_BERT_REPO: &str = "/srv/recovery/shared";
+
+const DAILY_BACKUP_STALE_HOURS: u16 = 48;
+const WEEKDAY_BACKUP_STALE_HOURS: u16 = 96;
 
 // Linux interfaces
 const TEMP_PATH: &str = "/sys/class/thermal/thermal_zone0/temp";
@@ -39,6 +43,51 @@ pub fn collect_ram_percent() -> Option<u8> {
     let available = value("MemAvailable:")?;
 
     Some(((total - available) * 100 / total) as u8)
+}
+
+pub fn collect_backup_statuses() -> BackupStatuses {
+    BackupStatuses {
+        xps_to_al: collect_backup_status(XPS_TO_AL_REPO, DAILY_BACKUP_STALE_HOURS),
+        xps_to_bert: collect_backup_status(XPS_TO_BERT_REPO, WEEKDAY_BACKUP_STALE_HOURS),
+        al_to_bert: collect_backup_status(AL_TO_BERT_REPO, DAILY_BACKUP_STALE_HOURS),
+    }
+}
+
+fn collect_backup_status(repository: &str, stale_hours: u16) -> BackupStatus {
+    let repository = Path::new(repository);
+
+    let Ok(locks) = fs::read_dir(repository.join("locks")) else {
+        return BackupStatus::Unavailable;
+    };
+
+    if locks.into_iter().next().is_some() {
+        return BackupStatus::Running;
+    }
+
+    let Ok(entries) = fs::read_dir(repository.join("snapshots")) else {
+        return BackupStatus::Unavailable;
+    };
+
+    let latest = entries
+        .filter_map(Result::ok)
+        .filter_map(|entry| entry.metadata().ok()?.modified().ok())
+        .max();
+
+    let Some(latest) = latest else {
+        return BackupStatus::Unavailable;
+    };
+
+    let age = SystemTime::now()
+        .duration_since(latest)
+        .unwrap_or(Duration::ZERO);
+    let age_minutes = u32::try_from(age.as_secs() / 60).unwrap_or(u32::MAX);
+    let stale_after_minutes = u32::from(stale_hours) * 60;
+
+    if age_minutes > stale_after_minutes {
+        BackupStatus::Stale { age_minutes }
+    } else {
+        BackupStatus::Current { age_minutes }
+    }
 }
 
 pub fn collect_disk_status(uid_path: &str, mount_path: &str) -> DiskStatus {
@@ -104,81 +153,3 @@ fn get_total_and_available_gib(mount_path: &str) -> (Option<u16>, Option<u16>) {
         fields[3].trim_end_matches('G').parse().ok(),
     )
 }
-
-// Stale code
-// pub enum CpStatus {
-//     Running,
-//     Stopped,
-//     Failed,
-//     Unknown,
-// }
-
-// pub enum BackupStatus {
-//     Checking,
-//     Current { age_hours: i64 },
-//     Stale { age_hours: i64 },
-//     Unavailable,
-// }
-
-// pub fn copyparty() -> CpStatus {
-//     let Ok(output) = Command::new("systemctl")
-//         .args(["--user", "is-active", "copyparty"])
-//         .output()
-//     else {
-//         return CpStatus::Unknown;
-//     };
-
-//     match String::from_utf8_lossy(&output.stdout).trim() {
-//         "active" => CpStatus::Running,
-//         "inactive" => CpStatus::Stopped,
-//         "failed" => CpStatus::Failed,
-//         _ => CpStatus::Unknown,
-//     }
-// }
-
-// pub fn backup() -> BackupStatus {
-//     let Ok(output) = Command::new("restic")
-//         .args([
-//             "--password-file",
-//             RESTIC_PASSWORD_FILE,
-//             "-r",
-//             RESTIC_REPO,
-//             "snapshots",
-//             "--latest",
-//             "1",
-//             "--json",
-//         ])
-//         .output()
-//     else {
-//         return BackupStatus::Unavailable;
-//     };
-
-//     if !output.status.success() {
-//         return BackupStatus::Unavailable;
-//     }
-
-//     let parsed: serde_json::Value = match serde_json::from_slice(&output.stdout) {
-//         Ok(value) => value,
-//         Err(_) => return BackupStatus::Unavailable,
-//     };
-
-//     let Some(time) = parsed
-//         .get(0)
-//         .and_then(|snapshot| snapshot.get("time"))
-//         .and_then(|time| time.as_str())
-//     else {
-//         return BackupStatus::Unavailable;
-//     };
-
-//     let Ok(snapshot_time) = DateTime::parse_from_rfc3339(time) else {
-//         return BackupStatus::Unavailable;
-//     };
-
-//     let age_hours = (Utc::now() - snapshot_time.with_timezone(&Utc)).num_hours();
-
-//     if age_hours > BACKUP_STALE_HOURS {
-//         BackupStatus::Stale { age_hours }
-//     } else {
-//         BackupStatus::Current { age_hours }
-//     }
-// }

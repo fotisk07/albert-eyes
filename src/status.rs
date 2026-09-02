@@ -42,6 +42,8 @@ pub enum DiskHealth {
 }
 #[derive(Debug)]
 pub enum BackupStatus {
-    Current,
-    Stale,
+    Current { age_minutes: u32 },
+    Running,
+    Stale { age_minutes: u32 },
+    Unavailable,
 }

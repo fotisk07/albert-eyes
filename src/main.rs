@@ -9,11 +9,7 @@ fn main() {
         al: collect::collect_disk_status(AL_DEVICE, "/srv/storage"),
         bert: collect::collect_disk_status(BERT_DEVICE, "/srv/recovery"),
         pi: collect::collect_pi_status(),
-        backups: status::BackupStatuses {
-            xps_to_al: status::BackupStatus::Current,
-            xps_to_bert: status::BackupStatus::Current,
-            al_to_bert: status::BackupStatus::Current,
-        },
+        backups: collect::collect_backup_statuses(),
     };
     dbg!(status);
 }
