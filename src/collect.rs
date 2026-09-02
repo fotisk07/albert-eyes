@@ -14,6 +14,7 @@ const AL_TO_BERT_REPO: &str = "/srv/recovery/shared";
 
 const DAILY_BACKUP_STALE_HOURS: u16 = 48;
 const WEEKDAY_BACKUP_STALE_HOURS: u16 = 96;
+const RESTIC_LOCK_STALE_MINUTES: u16 = 30;
 
 // Linux interfaces
 const TEMP_PATH: &str = "/sys/class/thermal/thermal_zone0/temp";
@@ -122,7 +123,20 @@ fn collect_backup_status(repository: &str, stale_hours: u16) -> BackupStatus {
         return BackupStatus::Unavailable;
     };
 
-    if locks.into_iter().next().is_some() {
+    let lock_is_recent = locks.filter_map(Result::ok).any(|lock| {
+        let Some(age) = lock
+            .metadata()
+            .ok()
+            .and_then(|metadata| metadata.modified().ok())
+            .and_then(|modified| SystemTime::now().duration_since(modified).ok())
+        else {
+            return false;
+        };
+
+        age <= Duration::from_secs(u64::from(RESTIC_LOCK_STALE_MINUTES) * 60)
+    });
+
+    if lock_is_recent {
         return BackupStatus::Running;
     }
 
