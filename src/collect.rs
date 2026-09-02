@@ -1,4 +1,6 @@
+use crate::status::{DiskAvailability, DiskHealth, DiskStatus, PiStatus};
 use chrono::{DateTime, Utc};
+use std::path::Path;
 use std::{
     fs,
     process::Command,
@@ -22,6 +24,78 @@ const DISK_STATS_PATH: &str = "/proc/diskstats";
 // Disk conversion
 const BYTES_PER_SECTOR: f64 = 512.0;
 const BYTES_PER_MIB: f64 = 1_048_576.0;
+
+pub fn collect_pi_status() -> PiStatus {
+    PiStatus {
+        temperature_c: Some(10),
+        cpu_percent: Some(10),
+        ram_percent: Some(10),
+    }
+}
+
+pub fn collect_disk_status(uid_path: &str, mount_path: &str) -> DiskStatus {
+    let availability = match Path::new(uid_path).exists() {
+        true => is_mounted(
+            mount_path,
+            uid_path.strip_prefix("/dev/disk/by-uuid/").unwrap(),
+        ),
+        false => DiskAvailability::Missing,
+    };
+    let (total_gib, available_gib) = match availability {
+        DiskAvailability::Mounted => get_total_and_available_gib(mount_path),
+        _ => (None, None),
+    };
+    DiskStatus {
+        availability,
+        temperature_c: None,
+        available_gib,
+        total_gib,
+        health: None,
+    }
+}
+
+fn is_mounted(mount_path: &str, uuid: &str) -> DiskAvailability {
+    let output = Command::new("findmnt")
+        .args([
+            "--noheadings",
+            "--raw",
+            "--mountpoint",
+            mount_path,
+            "--output",
+            "UUID",
+        ])
+        .output();
+
+    let Ok(output) = output else {
+        return DiskAvailability::Unknown;
+    };
+
+    let found_uuid = String::from_utf8_lossy(&output.stdout);
+
+    if found_uuid.trim() == uuid {
+        DiskAvailability::Mounted
+    } else {
+        DiskAvailability::Unmounted
+    }
+}
+
+fn get_total_and_available_gib(mount_path: &str) -> (Option<u16>, Option<u16>) {
+    let Ok(output) = Command::new("df").args(["-BG", mount_path]).output() else {
+        return (None, None);
+    };
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let Some(line) = stdout.lines().nth(1) else {
+        return (None, None);
+    };
+
+    let fields: Vec<_> = line.split_whitespace().collect();
+
+    (
+        fields[1].trim_end_matches('G').parse().ok(),
+        fields[3].trim_end_matches('G').parse().ok(),
+    )
+}
 
 pub struct Uptime {
     pub days: u64,
@@ -174,25 +248,6 @@ pub fn memory() -> Option<MemoryUsage> {
         used: (total - available) / 1024,
         total: total / 1024,
     })
-}
-
-pub fn storage() -> Option<u8> {
-    let output = Command::new("df")
-        .args(["--output=pcent", STORAGE_PATH])
-        .output()
-        .ok()?;
-
-    if !output.status.success() {
-        return None;
-    }
-
-    String::from_utf8_lossy(&output.stdout)
-        .lines()
-        .nth(1)?
-        .trim()
-        .trim_end_matches('%')
-        .parse()
-        .ok()
 }
 
 pub fn copyparty() -> CpStatus {
