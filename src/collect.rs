@@ -1,5 +1,5 @@
 use crate::status::{
-    AlbertStatus, BackupStatus, BackupStatuses, DiskAvailability, DiskStatus, PiStatus,
+    AlbertStatus, BackupStatus, BackupStatuses, DiskAvailability, DiskHealth, DiskStatus, PiStatus,
 };
 use std::path::Path;
 use std::time::{Duration, SystemTime};
@@ -18,14 +18,53 @@ const WEEKDAY_BACKUP_STALE_HOURS: u16 = 96;
 // Linux interfaces
 const TEMP_PATH: &str = "/sys/class/thermal/thermal_zone0/temp";
 const MEMINFO_PATH: &str = "/proc/meminfo";
+const SMART_CACHE_PATH: &str = "/run/albert-eyes/smart.json";
 
 pub fn collect_status() -> AlbertStatus {
+    let mut al = collect_disk_status(AL_DEVICE, "/srv/storage");
+    let mut bert = collect_disk_status(BERT_DEVICE, "/srv/recovery");
+    apply_smart_cache(&mut al, &mut bert);
+
     AlbertStatus {
-        al: collect_disk_status(AL_DEVICE, "/srv/storage"),
-        bert: collect_disk_status(BERT_DEVICE, "/srv/recovery"),
+        al,
+        bert,
         pi: collect_pi_status(),
         backups: collect_backup_statuses(),
     }
+}
+
+fn apply_smart_cache(al: &mut DiskStatus, bert: &mut DiskStatus) {
+    let Ok(contents) = fs::read_to_string(SMART_CACHE_PATH) else {
+        return;
+    };
+    let Ok(cache) = serde_json::from_str::<serde_json::Value>(&contents) else {
+        return;
+    };
+
+    apply_disk_smart(al, cache.get("al"));
+    apply_disk_smart(bert, cache.get("bert"));
+}
+
+fn apply_disk_smart(disk: &mut DiskStatus, smart: Option<&serde_json::Value>) {
+    if !matches!(&disk.availability, DiskAvailability::Mounted) {
+        return;
+    }
+
+    disk.temperature_c = smart
+        .and_then(|value| value.get("temperature_c"))
+        .and_then(serde_json::Value::as_u64)
+        .and_then(|temperature| u8::try_from(temperature).ok());
+
+    disk.health = smart
+        .and_then(|value| value.get("healthy"))
+        .and_then(serde_json::Value::as_bool)
+        .map(|healthy| {
+            if healthy {
+                DiskHealth::Healthy
+            } else {
+                DiskHealth::Sick
+            }
+        });
 }
 
 fn collect_pi_status() -> PiStatus {
