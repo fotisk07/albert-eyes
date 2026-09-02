@@ -59,13 +59,11 @@ fn disk_row(name: &str, disk: &DiskStatus) -> String {
                 _ => "--G free  ░░░░░░░░░░".into(),
             };
 
-            row(&format!(
-                "  {name:<5} {temperature:<5} {health}   {capacity}"
-            ))
+            centered_row(&format!("{name:<5} {temperature:<5} {health}   {capacity}"))
         }
-        DiskAvailability::Unmounted => row(&format!("  {name:<5} UNMOUNTED")),
-        DiskAvailability::Missing => row(&format!("  {name:<5} MISSING")),
-        DiskAvailability::Unknown => row(&format!("  {name:<5} UNKNOWN")),
+        DiskAvailability::Unmounted => centered_row(&format!("{name:<5} UNMOUNTED")),
+        DiskAvailability::Missing => centered_row(&format!("{name:<5} MISSING")),
+        DiskAvailability::Unknown => centered_row(&format!("{name:<5} UNKNOWN")),
     }
 }
 
@@ -100,7 +98,7 @@ pub fn render(status: &AlbertStatus) -> String {
         .unwrap_or_else(|| "--%".into());
 
     let backups = format!(
-        "  BKP XPS→AL {}  XPS→BERT {}  AL→BERT {}",
+        "BKP XPS→AL {}  XPS→BERT {}  AL→BERT {}",
         backup_status(&status.backups.xps_to_al),
         backup_status(&status.backups.xps_to_bert),
         backup_status(&status.backups.al_to_bert),
@@ -111,8 +109,8 @@ pub fn render(status: &AlbertStatus) -> String {
         face(),
         disk_row("AL", &status.al),
         disk_row("BERT", &status.bert),
-        row(&format!("  PI    {pi_temperature:<5} · RAM {ram}")),
-        row(&backups),
+        centered_row(&format!("PI    {pi_temperature:<5} · RAM {ram}")),
+        centered_row(&backups),
         format!("└{}┘", "─".repeat(INNER_WIDTH)),
     ]
     .join("\n")
