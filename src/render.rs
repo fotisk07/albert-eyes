@@ -3,6 +3,7 @@ use crate::status::{AlbertStatus, BackupStatus, DiskAvailability, DiskHealth, Di
 const CARD_WIDTH: usize = 55;
 const INNER_WIDTH: usize = CARD_WIDTH - 2;
 const BAR_WIDTH: usize = 10;
+const STATUS_WIDTH: usize = 37;
 
 fn row(content: &str) -> String {
     let content: String = content.chars().take(INNER_WIDTH).collect();
@@ -13,6 +14,10 @@ fn centered_row(content: &str) -> String {
     let width = content.chars().count();
     let padding = INNER_WIDTH.saturating_sub(width) / 2;
     row(&format!("{}{content}", " ".repeat(padding)))
+}
+
+fn status_row(content: &str) -> String {
+    centered_row(&format!("{content:<STATUS_WIDTH$}"))
 }
 
 fn face() -> String {
@@ -59,11 +64,11 @@ fn disk_row(name: &str, disk: &DiskStatus) -> String {
                 _ => "--G free  ░░░░░░░░░░".into(),
             };
 
-            centered_row(&format!("{name:<5} {temperature:<5} {health}   {capacity}"))
+            status_row(&format!("{name:<5} {temperature:<5} {health}   {capacity}"))
         }
-        DiskAvailability::Unmounted => centered_row(&format!("{name:<5} UNMOUNTED")),
-        DiskAvailability::Missing => centered_row(&format!("{name:<5} MISSING")),
-        DiskAvailability::Unknown => centered_row(&format!("{name:<5} UNKNOWN")),
+        DiskAvailability::Unmounted => status_row(&format!("{name:<5} UNMOUNTED")),
+        DiskAvailability::Missing => status_row(&format!("{name:<5} MISSING")),
+        DiskAvailability::Unknown => status_row(&format!("{name:<5} UNKNOWN")),
     }
 }
 
@@ -109,7 +114,7 @@ pub fn render(status: &AlbertStatus) -> String {
         face(),
         disk_row("AL", &status.al),
         disk_row("BERT", &status.bert),
-        centered_row(&format!("PI    {pi_temperature:<5} · RAM {ram}")),
+        status_row(&format!("PI    {pi_temperature:<5} · RAM {ram}")),
         centered_row(&backups),
         format!("└{}┘", "─".repeat(INNER_WIDTH)),
     ]
