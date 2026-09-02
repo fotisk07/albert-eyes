@@ -1,4 +1,5 @@
 mod collect;
+mod render;
 mod status;
 
 const AL_DEVICE: &str = "/dev/disk/by-uuid/ba307f60-44e2-42d0-b7af-589753384ebd";
@@ -11,5 +12,5 @@ fn main() {
         pi: collect::collect_pi_status(),
         backups: collect::collect_backup_statuses(),
     };
-    dbg!(status);
+    println!("{}", render::render(&status));
 }
