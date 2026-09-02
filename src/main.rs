@@ -1,16 +1,29 @@
+mod animation;
 mod collect;
 mod render;
 mod status;
+use std::io::Write;
+use std::thread;
+use std::time;
 
-const AL_DEVICE: &str = "/dev/disk/by-uuid/ba307f60-44e2-42d0-b7af-589753384ebd";
-const BERT_DEVICE: &str = "/dev/disk/by-uuid/f71b55fd-9bd2-427e-bc54-d1a00cc5d6ce";
+const RENDER_UPDATE_MSECS: u64 = 100;
+const STATUS_UPDATE_MSECS: u64 = 1000;
 
 fn main() {
-    let status = status::AlbertStatus {
-        al: collect::collect_disk_status(AL_DEVICE, "/srv/storage"),
-        bert: collect::collect_disk_status(BERT_DEVICE, "/srv/recovery"),
-        pi: collect::collect_pi_status(),
-        backups: collect::collect_backup_statuses(),
-    };
-    println!("{}", render::render(&status));
+    let mut status = collect::collect_status();
+    let mut last_collection = time::Instant::now();
+    let mut animation = animation::Animator::new();
+
+    print!("\x1B[2J");
+
+    loop {
+        if last_collection.elapsed() >= time::Duration::from_millis(STATUS_UPDATE_MSECS) {
+            status = collect::collect_status();
+            last_collection = time::Instant::now();
+        }
+        animation.update();
+        print!("\x1B[H{}", render::render(&status, animation.pose()));
+        let _ = std::io::stdout().flush();
+        thread::sleep(time::Duration::from_millis(RENDER_UPDATE_MSECS));
+    }
 }

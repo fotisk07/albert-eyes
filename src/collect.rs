@@ -1,7 +1,12 @@
-use crate::status::{BackupStatus, BackupStatuses, DiskAvailability, DiskStatus, PiStatus};
+use crate::status::{
+    AlbertStatus, BackupStatus, BackupStatuses, DiskAvailability, DiskStatus, PiStatus,
+};
 use std::path::Path;
 use std::time::{Duration, SystemTime};
 use std::{fs, process::Command};
+
+const AL_DEVICE: &str = "/dev/disk/by-uuid/ba307f60-44e2-42d0-b7af-589753384ebd";
+const BERT_DEVICE: &str = "/dev/disk/by-uuid/f71b55fd-9bd2-427e-bc54-d1a00cc5d6ce";
 
 const XPS_TO_AL_REPO: &str = "/srv/storage/backups/fotis-xps";
 const XPS_TO_BERT_REPO: &str = "/srv/recovery/computer-backups/fotis-xps";
@@ -14,7 +19,16 @@ const WEEKDAY_BACKUP_STALE_HOURS: u16 = 96;
 const TEMP_PATH: &str = "/sys/class/thermal/thermal_zone0/temp";
 const MEMINFO_PATH: &str = "/proc/meminfo";
 
-pub fn collect_pi_status() -> PiStatus {
+pub fn collect_status() -> AlbertStatus {
+    AlbertStatus {
+        al: collect_disk_status(AL_DEVICE, "/srv/storage"),
+        bert: collect_disk_status(BERT_DEVICE, "/srv/recovery"),
+        pi: collect_pi_status(),
+        backups: collect_backup_statuses(),
+    }
+}
+
+fn collect_pi_status() -> PiStatus {
     PiStatus {
         temperature_c: {
             fs::read_to_string(TEMP_PATH)
@@ -26,7 +40,7 @@ pub fn collect_pi_status() -> PiStatus {
     }
 }
 
-pub fn collect_ram_percent() -> Option<u8> {
+fn collect_ram_percent() -> Option<u8> {
     let meminfo = fs::read_to_string(MEMINFO_PATH).ok()?;
 
     let value = |name: &str| {
@@ -45,7 +59,7 @@ pub fn collect_ram_percent() -> Option<u8> {
     Some(((total - available) * 100 / total) as u8)
 }
 
-pub fn collect_backup_statuses() -> BackupStatuses {
+fn collect_backup_statuses() -> BackupStatuses {
     BackupStatuses {
         xps_to_al: collect_backup_status(XPS_TO_AL_REPO, DAILY_BACKUP_STALE_HOURS),
         xps_to_bert: collect_backup_status(XPS_TO_BERT_REPO, WEEKDAY_BACKUP_STALE_HOURS),
