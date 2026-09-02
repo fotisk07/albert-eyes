@@ -1,0 +1,6 @@
+[Unit]
+Description=Update Albert Eyes SMART cache
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/libexec/albert-eyes-smart

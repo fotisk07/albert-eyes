@@ -1,0 +1,10 @@
+[Unit]
+Description=Update Albert Eyes SMART cache every 15 minutes
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=15min
+Unit=albert-eyes-smart.service
+
+[Install]
+WantedBy=timers.target
