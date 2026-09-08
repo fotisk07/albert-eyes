@@ -210,10 +210,26 @@ fn draw_night(scene: &mut [Vec<char>], pose: FacePose) {
     }
 }
 
+fn draw_angry(scene: &mut [Vec<char>], pose: FacePose) {
+    let x = [5, 7, 6, 4][usize::from(pose.scene_frame % 4)];
+    let y = pose.vertical_offset;
+    put(scene, x, y, " ╲───────       ───────╱");
+    put(scene, x, y + 1, "╭───────╮     ╭───────╮");
+    let pupil: String = (0..7)
+        .map(|i| if i == pose.pupil_position { '●' } else { ' ' })
+        .collect();
+    put(scene, x, y + 2, &format!("│{pupil}│     │{pupil}│"));
+    put(scene, x, y + 3, "╰───────╯     ╰───────╯");
+    put(scene, x + 9, y + 4, "╭───╮");
+    put(scene, if pose.scene_frame < 2 { 1 } else { 33 }, y, "!!");
+}
+
 fn face(pose: FacePose) -> String {
     let mut scene = vec![vec![' '; FACE_WIDTH]; FACE_HEIGHT];
 
-    if pose.excited {
+    if pose.angry {
+        draw_angry(&mut scene, pose);
+    } else if pose.excited {
         draw_excited(&mut scene, pose);
     } else {
         match pose.phase {
@@ -318,4 +334,36 @@ pub fn render(status: &AlbertStatus, pose: FacePose) -> String {
         format!("└{}┘", "─".repeat(INNER_WIDTH)),
     ]
     .join("\n")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn angry_frames_move_and_fit_the_face() {
+        let mut previous = String::new();
+        for frame in 0..4 {
+            let rendered = face(FacePose {
+                phase: DayPhase::Night,
+                pupil_position: 3,
+                eyes: EyeState::Open,
+                mouth: Mouth::Smile,
+                vertical_offset: usize::from(frame % 2),
+                scene_frame: frame,
+                excited: true,
+                angry: true,
+            });
+            assert_eq!(rendered.lines().count(), FACE_HEIGHT);
+            assert!(
+                rendered
+                    .lines()
+                    .all(|line| line.chars().count() == CARD_WIDTH)
+            );
+            assert_eq!(rendered.matches('●').count(), 2);
+            assert!(rendered.contains("╭───╮"));
+            assert_ne!(rendered, previous);
+            previous = rendered;
+        }
+    }
 }

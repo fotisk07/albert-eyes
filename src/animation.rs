@@ -54,6 +54,7 @@ pub struct FacePose {
     pub vertical_offset: usize,
     pub scene_frame: u8,
     pub excited: bool,
+    pub angry: bool,
 }
 
 pub struct Animator {
@@ -61,6 +62,7 @@ pub struct Animator {
     action: Action,
     phase_override: Option<DayPhase>,
     backup_running: bool,
+    annoyed_since: Option<Instant>,
 }
 
 #[derive(Clone, Copy)]
@@ -104,6 +106,7 @@ impl Animator {
             },
             phase_override,
             backup_running: false,
+            annoyed_since: None,
         }
     }
 
@@ -111,10 +114,40 @@ impl Animator {
         self.pose
     }
 
+    pub fn touch(&mut self) {
+        self.annoyed_since = Some(Instant::now());
+    }
+
     pub fn update(&mut self, status: &AlbertStatus) {
-        let now = Instant::now();
+        self.update_at(status, Instant::now());
+    }
+
+    fn update_at(&mut self, status: &AlbertStatus, now: Instant) {
         let phase = self.phase_override.unwrap_or_else(current_phase);
         let backup_running = has_running_backup(status);
+
+        if let Some(started) = self.annoyed_since {
+            if now.duration_since(started) < Duration::from_secs(4) {
+                self.pose = default_pose(phase);
+                self.pose.angry = true;
+                self.pose.scene_frame = ((now.duration_since(started).as_millis() / 100) % 4) as u8;
+                self.pose.vertical_offset = usize::from(self.pose.scene_frame % 2);
+                self.pose.pupil_position = if self.pose.scene_frame < 2 {
+                    PUPIL_LEFT
+                } else {
+                    PUPIL_RIGHT
+                };
+                return;
+            }
+            self.annoyed_since = None;
+            self.backup_running = backup_running;
+            self.pose = default_pose(phase);
+            self.restore_default_expression();
+            self.action = Action::Dwelling {
+                until: now + self.random_dwell(),
+            };
+            return;
+        }
 
         if phase != self.pose.phase || backup_running != self.backup_running {
             self.backup_running = backup_running;
@@ -351,6 +384,7 @@ fn default_pose(phase: DayPhase) -> FacePose {
         vertical_offset: 0,
         scene_frame: 0,
         excited: false,
+        angry: false,
     }
 }
 
@@ -411,7 +445,49 @@ fn sequence_frame_duration(kind: SequenceKind, frame: u8) -> Duration {
 
 #[cfg(test)]
 mod tests {
-    use super::{DayPhase, phase_for_hour};
+    use super::*;
+    use crate::status::*;
+
+    #[test]
+    fn touch_overrides_sleep_and_backup_then_recovers() {
+        let disk = || DiskStatus {
+            availability: DiskAvailability::Unknown,
+            temperature_c: None,
+            available_gib: None,
+            total_gib: None,
+            health: None,
+        };
+        let status = AlbertStatus {
+            al: disk(),
+            bert: disk(),
+            pi: PiStatus {
+                temperature_c: None,
+                ram_percent: None,
+            },
+            backups: BackupStatuses {
+                xps_to_al: BackupStatus::Running,
+                xps_to_bert: BackupStatus::Unavailable,
+                al_to_bert: BackupStatus::Unavailable,
+            },
+        };
+        let mut animator = Animator::new();
+        animator.phase_override = Some(DayPhase::Night);
+        animator.touch();
+        let start = animator.annoyed_since.unwrap();
+        animator.update_at(&status, start);
+        assert!(animator.pose().angry);
+        assert!(!animator.pose().excited);
+        animator.update_at(&status, start + Duration::from_millis(100));
+        assert_eq!(animator.pose().scene_frame, 1);
+        // Another tap extends the reaction.
+        animator.annoyed_since = Some(start + Duration::from_secs(3));
+        animator.update_at(&status, start + Duration::from_secs(4));
+        assert!(animator.pose().angry);
+        animator.update_at(&status, start + Duration::from_secs(7));
+        assert!(!animator.pose().angry);
+        assert!(animator.pose().excited);
+        assert_eq!(animator.pose().phase, DayPhase::Night);
+    }
 
     #[test]
     fn maps_hours_to_daily_phases() {

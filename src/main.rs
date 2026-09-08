@@ -2,6 +2,7 @@ mod animation;
 mod collect;
 mod render;
 mod status;
+mod touch;
 use std::io::Write;
 use std::thread;
 use std::time;
@@ -13,6 +14,10 @@ fn main() {
     let mut status = collect::collect_status();
     let mut last_collection = time::Instant::now();
     let mut animation = animation::Animator::new();
+    let touches = touch::listen();
+    if std::env::var_os("ALBERT_EYES_TOUCH_PREVIEW").is_some() {
+        animation.touch();
+    }
 
     print!("\x1B[2J");
 
@@ -20,6 +25,9 @@ fn main() {
         if last_collection.elapsed() >= time::Duration::from_millis(STATUS_UPDATE_MSECS) {
             status = collect::collect_status();
             last_collection = time::Instant::now();
+        }
+        if touches.try_recv().is_ok() {
+            animation.touch();
         }
         animation.update(&status);
         print!("\x1B[H{}", render::render(&status, animation.pose()));

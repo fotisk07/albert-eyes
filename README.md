@@ -70,6 +70,36 @@ This is still a personal project rather than a configurable NAS dashboard: the m
 
 For testing animations, `ALBERT_EYES_PHASE` can be set to `morning`, `day`, `evening`, or `night`, and `ALBERT_EYES_BACKUP` can be set to `xps-to-al`, `xps-to-bert`, or `al-to-bert`.
 
+## Touch reactions
+
+Touching the screen makes Albert scowl, shake sideways and bounce for four
+seconds. Another tap restarts the reaction; holding or dragging counts only
+once. Afterwards he returns to the current time-of-day/backup mood. Status
+rows stay visible throughout.
+
+The LCDWiki 3.5inch HDMI Display-B uses HDMI for video, **not touch**. On Albert,
+Linux already exposes its SPI controller as `ADS7846 Touchscreen`, so no OS,
+display-server, calibration or driver changes are required. The app reads its
+Linux input events directly, without grabbing the device or reading keyboards.
+The existing `fotis` account already belongs to `input` and can read the device.
+If running as another account, grant that service read access to the touchscreen
+only (or use an appropriate input group); do not run the dashboard as root.
+
+The touchscreen is discovered by name, not a changing `eventN` number. Override
+with `ALBERT_EYES_TOUCH_DEVICE=/dev/input/by-path/...` if necessary. Missing or
+inaccessible hardware leaves the dashboard running and retries every five seconds.
+
+Build with `cargo build --release` and restart your existing dashboard service
+with the new binary to enable touch. Preview without hardware:
+
+```sh
+ALBERT_EYES_TOUCH_PREVIEW=1 cargo run --release
+```
+
+On the actual screen, test a tap, hold, release/re-tap, and a tap during night or
+backup mode. Each contact should trigger one reaction, repeated taps should
+extend it, and the normal mood should resume four seconds after the last tap.
+
 ## Albert's moods
 
 Run them to see them moving!
