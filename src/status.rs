@@ -19,6 +19,8 @@ pub struct DiskStatus {
 pub struct PiStatus {
     pub temperature_c: Option<u8>,
     pub ram_percent: Option<u8>,
+    pub available_gib: Option<u16>,
+    pub total_gib: Option<u16>,
 }
 
 #[derive(Debug)]

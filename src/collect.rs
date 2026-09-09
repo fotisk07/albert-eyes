@@ -69,6 +69,7 @@ fn apply_disk_smart(disk: &mut DiskStatus, smart: Option<&serde_json::Value>) {
 }
 
 fn collect_pi_status() -> PiStatus {
+    let (total_gib, available_gib) = get_total_and_available_gib(&"/");
     PiStatus {
         temperature_c: {
             fs::read_to_string(TEMP_PATH)
@@ -77,6 +78,8 @@ fn collect_pi_status() -> PiStatus {
                 .map(|value| (value / 1000) as u8)
         },
         ram_percent: collect_ram_percent(),
+        total_gib: total_gib,
+        available_gib: available_gib,
     }
 }
 

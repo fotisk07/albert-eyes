@@ -301,6 +301,11 @@ pub fn render(status: &AlbertStatus, pose: FacePose) -> String {
         .map(|value| format!("{value}%"))
         .unwrap_or_else(|| "--%".into());
 
+    let storage = match (status.pi.available_gib, status.pi.total_gib) {
+        (Some(available), Some(total)) => format!("{available}/{total}G"),
+        _ => String::from("--"),
+    };
+
     let backups = format!(
         "BKP XPS→AL {}  XPS→BERT {}  AL→BERT {}",
         backup_status(&status.backups.xps_to_al),
@@ -313,7 +318,9 @@ pub fn render(status: &AlbertStatus, pose: FacePose) -> String {
         face(pose),
         disk_row("AL", &status.al),
         disk_row("BERT", &status.bert),
-        status_row(&format!("PI    {pi_temperature:<5} · RAM {ram}")),
+        status_row(&format!(
+            "PI    {pi_temperature:<5} · RAM {ram} · Storage {storage}"
+        )),
         centered_row(&backups),
         format!("└{}┘", "─".repeat(INNER_WIDTH)),
     ]
