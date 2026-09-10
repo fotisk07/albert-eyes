@@ -72,6 +72,40 @@ Albert Eyes defaults to `screen` mode on a Linux virtual console and `pc` mode i
 
 For testing animations, `ALBERT_EYES_PHASE` can be set to `morning`, `day`, `evening`, or `night`, and `ALBERT_EYES_BACKUP` can be set to `xps-to-al`, `xps-to-bert`, or `al-to-bert`.
 
+## Attached display setup
+
+Albert's HDMI display runs at 640×480. Screen mode is designed for the `Uni3-Terminus28x14` console font, producing a 45×17 terminal that the dashboard fills. Configure the font once on Albert:
+
+```bash
+sudo sed -i 's/^CODESET=.*/CODESET="Uni3"/; s/^FONTFACE=.*/FONTFACE="Terminus"/; s/^FONTSIZE=.*/FONTSIZE="14x28"/' /etc/default/console-setup
+sudo setupcon --force --font-only
+```
+
+The user service sends the dashboard directly to `/dev/tty1`, so no keyboard or graphical desktop is required. Install and start it with:
+
+```bash
+mkdir -p ~/.config/systemd/user
+cp systemd/albert-eyes-display.service ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now albert-eyes-display.service
+```
+
+Useful commands:
+
+```bash
+systemctl --user status albert-eyes-display.service
+systemctl --user restart albert-eyes-display.service
+journalctl --user -u albert-eyes-display.service
+```
+
+## Deployment
+
+From the development PC, `./deploy.sh` cross-compiles the release binary for ARM64, copies it to `~/.local/bin/albert-eyes` on Albert, and restarts the display service. The cross-linker is configured in `.cargo/config.toml`.
+
+```bash
+./deploy.sh
+```
+
 ## Albert's moods
 
 Run them to see them moving!
