@@ -68,6 +68,8 @@ SMART information is a little different because it needs root access. `albert-ey
 
 This is still a personal project rather than a configurable NAS dashboard: the mount paths, Restic repositories, disk UUIDs, and SMART device IDs are hard-coded in `src/collect.rs` and `scripts/collect-smart.sh`. It is made for Linux and expects Rust, `findmnt`, `df`, and `smartctl`. It can be run with `cargo run --release`.
 
+Albert Eyes defaults to `screen` mode on a Linux virtual console and `pc` mode in other terminals. Override this with `--mode screen`, `--mode pc`, or the `ALBERT_EYES_MODE` environment variable. Screen mode renders a 45×17 layout designed for Albert's 640×480 console with a 14×28 font.
+
 For testing animations, `ALBERT_EYES_PHASE` can be set to `morning`, `day`, `evening`, or `night`, and `ALBERT_EYES_BACKUP` can be set to `xps-to-al`, `xps-to-bert`, or `al-to-bert`.
 
 ## Albert's moods

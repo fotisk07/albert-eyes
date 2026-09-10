@@ -1,30 +1,56 @@
 use crate::animation::{DayPhase, EyeState, FacePose, Mouth};
 use crate::status::{AlbertStatus, BackupStatus, DiskAvailability, DiskHealth, DiskStatus};
 
-const CARD_WIDTH: usize = 55;
-const INNER_WIDTH: usize = CARD_WIDTH - 2;
+const PC_CARD_WIDTH: usize = 55;
+const PC_FACE_HEIGHT: usize = 7;
+const SCREEN_CARD_WIDTH: usize = 45;
+const SCREEN_FACE_HEIGHT: usize = 10;
 const BAR_WIDTH: usize = 10;
 const STATUS_WIDTH: usize = 37;
 const FACE_WIDTH: usize = 45;
 const FACE_HEIGHT: usize = 7;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DisplayMode {
+    Pc,
+    Screen,
+}
+
+impl DisplayMode {
+    fn card_width(self) -> usize {
+        match self {
+            Self::Pc => PC_CARD_WIDTH,
+            Self::Screen => SCREEN_CARD_WIDTH,
+        }
+    }
+
+    fn face_height(self) -> usize {
+        match self {
+            Self::Pc => PC_FACE_HEIGHT,
+            Self::Screen => SCREEN_FACE_HEIGHT,
+        }
+    }
+}
 const SMALL_EYE_INNER_WIDTH: usize = 7;
 const SMALL_EYE_SEPARATION: usize = 5;
 const LARGE_EYE_INNER_WIDTH: usize = 9;
 const LARGE_EYE_SEPARATION: usize = 9;
 
-fn row(content: &str) -> String {
-    let content: String = content.chars().take(INNER_WIDTH).collect();
-    format!("│{content:<INNER_WIDTH$}│")
+fn row(content: &str, card_width: usize) -> String {
+    let inner_width = card_width - 2;
+    let content: String = content.chars().take(inner_width).collect();
+    format!("│{content:<inner_width$}│")
 }
 
-fn centered_row(content: &str) -> String {
+fn centered_row(content: &str, card_width: usize) -> String {
+    let inner_width = card_width - 2;
     let width = content.chars().count();
-    let padding = INNER_WIDTH.saturating_sub(width) / 2;
-    row(&format!("{}{content}", " ".repeat(padding)))
+    let padding = inner_width.saturating_sub(width) / 2;
+    row(&format!("{}{content}", " ".repeat(padding)), card_width)
 }
 
-fn status_row(content: &str) -> String {
-    centered_row(&format!("{content:<STATUS_WIDTH$}"))
+fn status_row(content: &str, card_width: usize) -> String {
+    centered_row(&format!("{content:<STATUS_WIDTH$}"), card_width)
 }
 
 fn eye_rows(pose: FacePose, inner_width: usize, height: usize) -> Vec<String> {
@@ -210,7 +236,7 @@ fn draw_night(scene: &mut [Vec<char>], pose: FacePose) {
     }
 }
 
-fn face(pose: FacePose) -> String {
+fn face(pose: FacePose, mode: DisplayMode) -> String {
     let mut scene = vec![vec![' '; FACE_WIDTH]; FACE_HEIGHT];
 
     if pose.excited {
@@ -224,9 +250,19 @@ fn face(pose: FacePose) -> String {
         }
     }
 
-    scene
-        .into_iter()
-        .map(|line| centered_row(&line.into_iter().collect::<String>()))
+    let card_width = mode.card_width();
+    let face_height = mode.face_height();
+    let top_padding = match mode {
+        DisplayMode::Pc => face_height.saturating_sub(FACE_HEIGHT) / 2,
+        DisplayMode::Screen => face_height.saturating_sub(FACE_HEIGHT),
+    };
+    let bottom_padding = face_height - FACE_HEIGHT - top_padding;
+    let blank = " ".repeat(FACE_WIDTH);
+
+    std::iter::repeat_n(blank.clone(), top_padding)
+        .chain(scene.into_iter().map(|line| line.into_iter().collect()))
+        .chain(std::iter::repeat_n(blank, bottom_padding))
+        .map(|line| centered_row(&line, card_width))
         .collect::<Vec<_>>()
         .join("\n")
 }
@@ -242,7 +278,7 @@ fn bar(available_gib: u16, total_gib: u16) -> String {
     format!("{}{}", "█".repeat(filled), "░".repeat(BAR_WIDTH - filled))
 }
 
-fn disk_row(name: &str, disk: &DiskStatus) -> String {
+fn disk_row(name: &str, disk: &DiskStatus, card_width: usize) -> String {
     match disk.availability {
         DiskAvailability::Mounted => {
             let temperature = disk
@@ -263,11 +299,14 @@ fn disk_row(name: &str, disk: &DiskStatus) -> String {
                 _ => "--G free  ░░░░░░░░░░".into(),
             };
 
-            status_row(&format!("{name:<5} {temperature:<5} {health}   {capacity}"))
+            status_row(
+                &format!("{name:<5} {temperature:<5} {health}   {capacity}"),
+                card_width,
+            )
         }
-        DiskAvailability::Unmounted => status_row(&format!("{name:<5} UNMOUNTED")),
-        DiskAvailability::Missing => status_row(&format!("{name:<5} MISSING")),
-        DiskAvailability::Unknown => status_row(&format!("{name:<5} UNKNOWN")),
+        DiskAvailability::Unmounted => status_row(&format!("{name:<5} UNMOUNTED"), card_width),
+        DiskAvailability::Missing => status_row(&format!("{name:<5} MISSING"), card_width),
+        DiskAvailability::Unknown => status_row(&format!("{name:<5} UNKNOWN"), card_width),
     }
 }
 
@@ -289,7 +328,7 @@ fn backup_status(status: &BackupStatus) -> String {
     }
 }
 
-pub fn render(status: &AlbertStatus, pose: FacePose) -> String {
+pub fn render(status: &AlbertStatus, pose: FacePose, mode: DisplayMode) -> String {
     let pi_temperature = status
         .pi
         .temperature_c
@@ -306,23 +345,43 @@ pub fn render(status: &AlbertStatus, pose: FacePose) -> String {
         _ => String::from("--"),
     };
 
-    let backups = format!(
-        "BKP XPS→AL {}  XPS→BERT {}  AL→BERT {}",
-        backup_status(&status.backups.xps_to_al),
-        backup_status(&status.backups.xps_to_bert),
-        backup_status(&status.backups.al_to_bert),
-    );
+    let card_width = mode.card_width();
+    let inner_width = card_width - 2;
+    let mut lines = vec![
+        format!("┌{}┐", "─".repeat(inner_width)),
+        face(pose, mode),
+        disk_row("AL", &status.al, card_width),
+        disk_row("BERT", &status.bert, card_width),
+        status_row(
+            &format!("PI    {pi_temperature:<5} · RAM {ram} · Storage {storage}"),
+            card_width,
+        ),
+    ];
 
-    [
-        format!("┌{}┐", "─".repeat(INNER_WIDTH)),
-        face(pose),
-        disk_row("AL", &status.al),
-        disk_row("BERT", &status.bert),
-        status_row(&format!(
-            "PI    {pi_temperature:<5} · RAM {ram} · Storage {storage}"
+    match mode {
+        DisplayMode::Pc => lines.push(centered_row(
+            &format!(
+                "BKP XPS→AL {}  XPS→BERT {}  AL→BERT {}",
+                backup_status(&status.backups.xps_to_al),
+                backup_status(&status.backups.xps_to_bert),
+                backup_status(&status.backups.al_to_bert),
+            ),
+            card_width,
         )),
-        centered_row(&backups),
-        format!("└{}┘", "─".repeat(INNER_WIDTH)),
-    ]
-    .join("\n")
+        DisplayMode::Screen => {
+            lines.push(centered_row(
+                &format!(
+                    "BKP X→AL {}  X→BERT {}  AL→BERT {}",
+                    backup_status(&status.backups.xps_to_al),
+                    backup_status(&status.backups.xps_to_bert),
+                    backup_status(&status.backups.al_to_bert),
+                ),
+                card_width,
+            ));
+            lines.push(row("", card_width));
+        }
+    }
+
+    lines.push(format!("└{}┘", "─".repeat(inner_width)));
+    lines.join("\n")
 }
