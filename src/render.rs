@@ -270,9 +270,10 @@ fn face(pose: FacePose, mode: DisplayMode) -> String {
 
     let card_width = mode.card_width();
     let face_height = mode.face_height();
+    let available_padding = face_height.saturating_sub(FACE_HEIGHT);
     let top_padding = match mode {
-        DisplayMode::Pc => face_height.saturating_sub(FACE_HEIGHT) / 2,
-        DisplayMode::Screen => face_height.saturating_sub(FACE_HEIGHT),
+        DisplayMode::Pc => available_padding / 2,
+        DisplayMode::Screen => available_padding.saturating_sub(1),
     };
     let bottom_padding = face_height - FACE_HEIGHT - top_padding;
     let blank = " ".repeat(FACE_WIDTH);
