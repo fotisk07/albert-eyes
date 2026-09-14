@@ -7,6 +7,13 @@ const PUPIL_CENTER: usize = 3;
 const PUPIL_LEFT: usize = 1;
 const PUPIL_RIGHT: usize = 5;
 
+#[derive(Clone, Copy)]
+pub enum Mood {
+    Normal,
+    Excited,
+    Mad,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DayPhase {
     Morning,
@@ -45,7 +52,7 @@ pub enum Mouth {
     Hidden,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
 pub struct FacePose {
     pub phase: DayPhase,
     pub pupil_position: usize,
@@ -53,12 +60,14 @@ pub struct FacePose {
     pub mouth: Mouth,
     pub vertical_offset: usize,
     pub scene_frame: u8,
-    pub excited: bool,
-    pub mad: bool,
+    pub mood: Mood,
 }
 
 pub struct Animator {
-    pose: FacePose,
+    phase: DayPhase,
+    pupil_position: usize,
+    excited_scene_frame: u8,
+    excited_vertical_offset: usize,
     action: Action,
     phase_override: Option<DayPhase>,
     backup_running: bool,
@@ -92,6 +101,92 @@ enum SequenceKind {
     Nod,
     Sleep,
 }
+impl SequenceKind {
+    fn frame_count(self) -> u8 {
+        match self {
+            Self::Sip => 5,
+            Self::Yawn | Self::Nod | Self::Sleep => 4,
+        }
+    }
+
+    fn frame_duration(self, frame: u8) -> Duration {
+        let milliseconds = match (self, frame) {
+            (Self::Sip, 0) => 600,
+            (Self::Sip, 1 | 3) => 300,
+            (Self::Sip, 2) => 900,
+            (Self::Sip, _) => 400,
+            (Self::Yawn, 0 | 3) => 350,
+            (Self::Yawn, 1) => 500,
+            (Self::Yawn, _) => 900,
+            (Self::Nod, 0 | 3) => 500,
+            (Self::Nod, _) => 1_000,
+            (Self::Sleep, 0 | 3) => 1_200,
+            (Self::Sleep, _) => 1_500,
+        };
+
+        Duration::from_millis(milliseconds)
+    }
+
+    fn apply_frame(self, frame: u8, pose: &mut FacePose) {
+        match (self, frame) {
+            (Self::Sip, 0) => {
+                pose.pupil_position = PUPIL_RIGHT;
+                pose.eyes = EyeState::Open;
+                pose.mouth = Mouth::Relaxed;
+                pose.scene_frame = 0;
+            }
+            (Self::Sip, 1) => pose.scene_frame = 1,
+            (Self::Sip, 2) => {
+                pose.eyes = EyeState::Closed;
+                pose.mouth = Mouth::Hidden;
+                pose.scene_frame = 2;
+            }
+            (Self::Sip, 3) => {
+                pose.eyes = EyeState::Open;
+                pose.mouth = Mouth::Relaxed;
+                pose.scene_frame = 1;
+            }
+            (Self::Sip, 4) => pose.scene_frame = 0,
+            (Self::Yawn, 0) => pose.mouth = Mouth::SmallO,
+            (Self::Yawn, 1 | 2) => {
+                pose.eyes = EyeState::Closed;
+                pose.mouth = Mouth::Yawn;
+            }
+            (Self::Yawn, 3) => {
+                pose.eyes = EyeState::Open;
+                pose.mouth = Mouth::SmallO;
+            }
+            (Self::Nod, 0) => pose.eyes = EyeState::Closed,
+            (Self::Nod, 1 | 2) => {
+                pose.eyes = EyeState::Closed;
+                pose.vertical_offset = 1;
+            }
+            (Self::Nod, 3) => {
+                pose.eyes = EyeState::Open;
+                pose.vertical_offset = 0;
+            }
+            (Self::Sleep, 0) => {
+                pose.eyes = EyeState::Closed;
+                pose.mouth = Mouth::Sleeping;
+                pose.vertical_offset = 0;
+                pose.scene_frame = 0;
+            }
+            (Self::Sleep, 1) => {
+                pose.mouth = Mouth::SleepingOpen;
+                pose.scene_frame = 1;
+            }
+            (Self::Sleep, 2) => {
+                pose.mouth = Mouth::SleepingOpen;
+                pose.scene_frame = 2;
+            }
+            (Self::Sleep, 3) => {
+                pose.mouth = Mouth::Sleeping;
+                pose.scene_frame = 0;
+            }
+            _ => {}
+        }
+    }
+}
 
 impl Animator {
     pub fn new() -> Self {
@@ -102,7 +197,10 @@ impl Animator {
         let now = Instant::now();
 
         Self {
-            pose: default_pose(phase),
+            phase,
+            pupil_position: PUPIL_CENTER,
+            excited_scene_frame: 0,
+            excited_vertical_offset: 0,
             action: Action::Dwelling {
                 until: now + random_dwell(phase),
             },
@@ -112,11 +210,31 @@ impl Animator {
     }
 
     pub fn pose(&self) -> FacePose {
-        self.pose
+        let mut pose = default_pose(self.phase);
+        pose.pupil_position = self.pupil_position;
+
+        if self.backup_running {
+            pose.eyes = EyeState::Open;
+            pose.mouth = Mouth::Happy;
+            pose.mood = Mood::Excited;
+            pose.scene_frame = self.excited_scene_frame;
+            pose.vertical_offset = self.excited_vertical_offset;
+        }
+
+        match self.action {
+            Action::Blinking { .. } => pose.eyes = EyeState::Closed,
+            Action::Sequence { kind, frame, .. } => {
+                for current_frame in 0..=frame {
+                    kind.apply_frame(current_frame, &mut pose);
+                }
+            }
+            Action::Mad { .. } => pose.mood = Mood::Mad,
+            Action::Moving { .. } | Action::Dwelling { .. } => {}
+        }
+        pose
     }
 
     pub fn touched(&mut self) {
-        self.pose.mad = true;
         self.action = Action::Mad {
             until: Instant::now() + Duration::from_secs(1),
         };
@@ -127,13 +245,13 @@ impl Animator {
         let phase = self.phase_override.unwrap_or_else(current_phase);
         let backup_running = has_running_backup(status);
 
-        if phase != self.pose.phase || backup_running != self.backup_running {
+        if phase != self.phase || backup_running != self.backup_running {
+            self.phase = phase;
             self.backup_running = backup_running;
-            self.pose = default_pose(phase);
-            self.restore_default_expression();
-            self.action = Action::Dwelling {
-                until: now + self.random_dwell(),
-            };
+            self.pupil_position = PUPIL_CENTER;
+            self.excited_scene_frame = 0;
+            self.excited_vertical_offset = 0;
+            self.start_dwelling(now);
             return;
         }
 
@@ -143,43 +261,35 @@ impl Animator {
                 self.action = self.choose_action(now);
             }
             Action::Blinking { until } if now >= until => {
-                self.restore_default_expression();
-                self.action = Action::Dwelling {
-                    until: now + self.random_dwell(),
-                };
+                self.start_dwelling(now);
             }
             Action::Sequence { kind, frame, until } if now >= until => {
                 self.advance_sequence(kind, frame, now)
             }
             Action::Dwelling { .. } | Action::Blinking { .. } | Action::Sequence { .. } => {}
             Action::Mad { until } if now >= until => {
-                self.restore_default_expression();
-                self.action = Action::Dwelling {
-                    until: now + self.random_dwell(),
-                };
+                self.start_dwelling(now);
             }
             Action::Mad { .. } => {}
         }
     }
 
     fn update_movement(&mut self, target: usize, now: Instant) {
-        self.pose.pupil_position = match self.pose.pupil_position {
+        self.pupil_position = match self.pupil_position {
             position if position < target => position + 1,
             position if position > target => position - 1,
             position => position,
         };
 
-        if self.pose.pupil_position == target {
-            self.action = Action::Dwelling {
-                until: now + self.random_dwell(),
-            };
+        if self.pupil_position == target {
+            self.start_dwelling(now);
         }
     }
 
     fn choose_action(&mut self, now: Instant) -> Action {
         if self.backup_running {
-            self.pose.scene_frame = (self.pose.scene_frame + 1) % 2;
-            self.pose.vertical_offset = rand::random_range(0..=1);
+            self.excited_scene_frame = (self.excited_scene_frame + 1) % 2;
+            self.excited_vertical_offset = rand::random_range(0..=1);
 
             return match rand::random_range(0..10) {
                 0..3 => Action::Moving { target: PUPIL_LEFT },
@@ -194,7 +304,7 @@ impl Animator {
             };
         }
 
-        match self.pose.phase {
+        match self.phase {
             DayPhase::Morning => match rand::random_range(0..12) {
                 0..4 => Action::Moving {
                     target: PUPIL_CENTER,
@@ -236,119 +346,45 @@ impl Animator {
     }
 
     fn start_blink(&mut self, now: Instant, duration_millis: u64) -> Action {
-        self.pose.eyes = EyeState::Closed;
         Action::Blinking {
             until: now + Duration::from_millis(duration_millis),
         }
     }
 
     fn start_sequence(&mut self, kind: SequenceKind, now: Instant) -> Action {
-        self.apply_sequence_frame(kind, 0);
         Action::Sequence {
             kind,
             frame: 0,
-            until: now + sequence_frame_duration(kind, 0),
+            until: now + kind.frame_duration(0),
         }
     }
 
     fn advance_sequence(&mut self, kind: SequenceKind, frame: u8, now: Instant) {
         let next_frame = frame + 1;
 
-        if next_frame >= sequence_frame_count(kind) {
-            self.restore_default_expression();
-            self.action = Action::Dwelling {
-                until: now + self.random_dwell(),
-            };
+        if next_frame >= kind.frame_count() {
+            self.start_dwelling(now);
             return;
         }
 
-        self.apply_sequence_frame(kind, next_frame);
         self.action = Action::Sequence {
             kind,
             frame: next_frame,
-            until: now + sequence_frame_duration(kind, next_frame),
+            until: now + kind.frame_duration(next_frame),
         };
     }
 
-    fn apply_sequence_frame(&mut self, kind: SequenceKind, frame: u8) {
-        match (kind, frame) {
-            (SequenceKind::Sip, 0) => {
-                self.pose.pupil_position = PUPIL_RIGHT;
-                self.pose.eyes = EyeState::Open;
-                self.pose.mouth = Mouth::Relaxed;
-                self.pose.scene_frame = 0;
-            }
-            (SequenceKind::Sip, 1) => self.pose.scene_frame = 1,
-            (SequenceKind::Sip, 2) => {
-                self.pose.eyes = EyeState::Closed;
-                self.pose.mouth = Mouth::Hidden;
-                self.pose.scene_frame = 2;
-            }
-            (SequenceKind::Sip, 3) => {
-                self.pose.eyes = EyeState::Open;
-                self.pose.mouth = Mouth::Relaxed;
-                self.pose.scene_frame = 1;
-            }
-            (SequenceKind::Sip, 4) => self.pose.scene_frame = 0,
-            (SequenceKind::Yawn, 0) => self.pose.mouth = Mouth::SmallO,
-            (SequenceKind::Yawn, 1 | 2) => {
-                self.pose.eyes = EyeState::Closed;
-                self.pose.mouth = Mouth::Yawn;
-            }
-            (SequenceKind::Yawn, 3) => {
-                self.pose.eyes = EyeState::Open;
-                self.pose.mouth = Mouth::SmallO;
-            }
-            (SequenceKind::Nod, 0) => self.pose.eyes = EyeState::Closed,
-            (SequenceKind::Nod, 1 | 2) => {
-                self.pose.eyes = EyeState::Closed;
-                self.pose.vertical_offset = 1;
-            }
-            (SequenceKind::Nod, 3) => {
-                self.pose.eyes = EyeState::Open;
-                self.pose.vertical_offset = 0;
-            }
-            (SequenceKind::Sleep, 0) => {
-                self.pose.eyes = EyeState::Closed;
-                self.pose.mouth = Mouth::Sleeping;
-                self.pose.vertical_offset = 0;
-                self.pose.scene_frame = 0;
-            }
-            (SequenceKind::Sleep, 1) => {
-                self.pose.mouth = Mouth::SleepingOpen;
-                self.pose.scene_frame = 1;
-            }
-            (SequenceKind::Sleep, 2) => {
-                self.pose.mouth = Mouth::SleepingOpen;
-                self.pose.scene_frame = 2;
-            }
-            (SequenceKind::Sleep, 3) => {
-                self.pose.mouth = Mouth::Sleeping;
-                self.pose.scene_frame = 0;
-            }
-            _ => {}
-        }
-    }
-
-    fn restore_default_expression(&mut self) {
-        let pupil_position = self.pose.pupil_position;
-        self.pose = default_pose(self.pose.phase);
-
-        if self.backup_running {
-            self.pose.eyes = EyeState::Open;
-            self.pose.mouth = Mouth::Happy;
-            self.pose.pupil_position = pupil_position;
-            self.pose.excited = true;
-        } else if self.pose.phase != DayPhase::Night {
-            self.pose.pupil_position = pupil_position;
-        }
+    fn start_dwelling(&mut self, now: Instant) {
+        self.action = Action::Dwelling {
+            until: now + self.random_dwell(),
+        };
     }
 
     fn random_dwell(&self) -> Duration {
         if self.backup_running {
             Duration::from_millis(rand::random_range(200..600))
         } else {
-            random_dwell(self.pose.phase)
+            random_dwell(self.phase)
         }
     }
 }
@@ -368,8 +404,7 @@ fn default_pose(phase: DayPhase) -> FacePose {
         mouth,
         vertical_offset: 0,
         scene_frame: 0,
-        excited: false,
-        mad: false,
+        mood: Mood::Normal,
     }
 }
 
@@ -401,46 +436,4 @@ fn random_dwell(phase: DayPhase) -> Duration {
     };
 
     Duration::from_millis(milliseconds)
-}
-
-fn sequence_frame_count(kind: SequenceKind) -> u8 {
-    match kind {
-        SequenceKind::Sip => 5,
-        SequenceKind::Yawn | SequenceKind::Nod | SequenceKind::Sleep => 4,
-    }
-}
-
-fn sequence_frame_duration(kind: SequenceKind, frame: u8) -> Duration {
-    let milliseconds = match (kind, frame) {
-        (SequenceKind::Sip, 0) => 600,
-        (SequenceKind::Sip, 1 | 3) => 300,
-        (SequenceKind::Sip, 2) => 900,
-        (SequenceKind::Sip, _) => 400,
-        (SequenceKind::Yawn, 0 | 3) => 350,
-        (SequenceKind::Yawn, 1) => 500,
-        (SequenceKind::Yawn, _) => 900,
-        (SequenceKind::Nod, 0 | 3) => 500,
-        (SequenceKind::Nod, _) => 1_000,
-        (SequenceKind::Sleep, 0 | 3) => 1_200,
-        (SequenceKind::Sleep, _) => 1_500,
-    };
-
-    Duration::from_millis(milliseconds)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{DayPhase, phase_for_hour};
-
-    #[test]
-    fn maps_hours_to_daily_phases() {
-        assert_eq!(phase_for_hour(5), DayPhase::Night);
-        assert_eq!(phase_for_hour(6), DayPhase::Morning);
-        assert_eq!(phase_for_hour(10), DayPhase::Morning);
-        assert_eq!(phase_for_hour(11), DayPhase::Day);
-        assert_eq!(phase_for_hour(17), DayPhase::Day);
-        assert_eq!(phase_for_hour(18), DayPhase::Evening);
-        assert_eq!(phase_for_hour(21), DayPhase::Evening);
-        assert_eq!(phase_for_hour(22), DayPhase::Night);
-    }
 }

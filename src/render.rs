@@ -1,4 +1,4 @@
-use crate::animation::{DayPhase, EyeState, FacePose, Mouth};
+use crate::animation::{DayPhase, EyeState, FacePose, Mood, Mouth};
 use crate::status::{AlbertStatus, BackupStatus, DiskAvailability, DiskHealth, DiskStatus};
 
 const PC_CARD_WIDTH: usize = 55;
@@ -255,17 +255,15 @@ fn draw_night(scene: &mut [Vec<char>], pose: FacePose) {
 fn face(pose: FacePose, mode: DisplayMode) -> String {
     let mut scene = vec![vec![' '; FACE_WIDTH]; FACE_HEIGHT];
 
-    if pose.mad {
-        draw_mad(&mut scene);
-    } else if pose.excited {
-        draw_excited(&mut scene, pose);
-    } else {
-        match pose.phase {
+    match pose.mood {
+        Mood::Mad => draw_mad(&mut scene),
+        Mood::Excited => draw_excited(&mut scene, pose),
+        Mood::Normal => match pose.phase {
             DayPhase::Morning => draw_morning(&mut scene, pose),
             DayPhase::Day => draw_day(&mut scene, pose),
             DayPhase::Evening => draw_evening(&mut scene, pose),
             DayPhase::Night => draw_night(&mut scene, pose),
-        }
+        },
     }
 
     let card_width = mode.card_width();
