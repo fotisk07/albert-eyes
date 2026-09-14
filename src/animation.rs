@@ -54,6 +54,7 @@ pub struct FacePose {
     pub vertical_offset: usize,
     pub scene_frame: u8,
     pub excited: bool,
+    pub mad: bool,
 }
 
 pub struct Animator {
@@ -77,6 +78,9 @@ enum Action {
     Sequence {
         kind: SequenceKind,
         frame: u8,
+        until: Instant,
+    },
+    Mad {
         until: Instant,
     },
 }
@@ -111,6 +115,13 @@ impl Animator {
         self.pose
     }
 
+    pub fn touched(&mut self) {
+        self.pose.mad = true;
+        self.action = Action::Mad {
+            until: Instant::now() + Duration::from_secs(1),
+        };
+    }
+
     pub fn update(&mut self, status: &AlbertStatus) {
         let now = Instant::now();
         let phase = self.phase_override.unwrap_or_else(current_phase);
@@ -141,6 +152,13 @@ impl Animator {
                 self.advance_sequence(kind, frame, now)
             }
             Action::Dwelling { .. } | Action::Blinking { .. } | Action::Sequence { .. } => {}
+            Action::Mad { until } if now >= until => {
+                self.restore_default_expression();
+                self.action = Action::Dwelling {
+                    until: now + self.random_dwell(),
+                };
+            }
+            Action::Mad { .. } => {}
         }
     }
 
@@ -351,6 +369,7 @@ fn default_pose(phase: DayPhase) -> FacePose {
         vertical_offset: 0,
         scene_frame: 0,
         excited: false,
+        mad: false,
     }
 }
 

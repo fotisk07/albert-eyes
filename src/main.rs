@@ -2,9 +2,11 @@ mod animation;
 mod collect;
 mod render;
 mod status;
+mod touch;
 use render::DisplayMode;
 use std::env;
 use std::io::Write;
+use std::sync;
 use std::thread;
 use std::time;
 
@@ -64,13 +66,17 @@ fn main() {
     let mut status = collect::collect_status();
     let mut last_collection = time::Instant::now();
     let mut animation = animation::Animator::new();
+    let (touch_sender, touch_receiver) = sync::mpsc::channel();
+    thread::spawn(move || touch::listen(touch_sender));
 
     print!("\x1B[2J");
-
     loop {
         if last_collection.elapsed() >= time::Duration::from_millis(STATUS_UPDATE_MSECS) {
             status = collect::collect_status();
             last_collection = time::Instant::now();
+        }
+        while touch_receiver.try_recv().is_ok() {
+            animation.touched();
         }
         animation.update(&status);
         print!("\x1B[H{}", render::render(&status, animation.pose(), mode));

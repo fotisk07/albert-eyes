@@ -187,6 +187,22 @@ fn draw_evening(scene: &mut [Vec<char>], pose: FacePose) {
     );
 }
 
+fn draw_mad(scene: &mut [Vec<char>]) {
+    let rows = [
+        "       ╲─────────╮         ╭─────────╱",
+        "        ╲  ╲   ╱ │         │ ╲   ╱  ╱",
+        "        │   ╳    │         │   ╳    │",
+        "        │  ╱ ╲   │         │  ╱ ╲   │",
+        "        ╰────────╯         ╰────────╯",
+        "                     ╲ ╱",
+        "                 ╭───╳───╮",
+    ];
+
+    for (y, row) in rows.iter().enumerate() {
+        put(scene, 0, y, row);
+    }
+}
+
 fn draw_excited(scene: &mut [Vec<char>], pose: FacePose) {
     draw_face(
         scene,
@@ -239,7 +255,9 @@ fn draw_night(scene: &mut [Vec<char>], pose: FacePose) {
 fn face(pose: FacePose, mode: DisplayMode) -> String {
     let mut scene = vec![vec![' '; FACE_WIDTH]; FACE_HEIGHT];
 
-    if pose.excited {
+    if pose.mad {
+        draw_mad(&mut scene);
+    } else if pose.excited {
         draw_excited(&mut scene, pose);
     } else {
         match pose.phase {
