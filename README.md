@@ -153,3 +153,10 @@ Run them to see them moving!
 │                                                     │
 │                          ~                          │
 ```
+
+## Photos
+
+<p align="center">
+  <img src="media/20260915_163929.jpg" alt="Albert running the dashboard on its attached display" width="49%">
+  <img src="media/IMG-20260901-WA0003.jpeg" alt="Albert's Raspberry Pi and attached storage" width="49%">
+</p>
