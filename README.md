@@ -100,10 +100,11 @@ journalctl --user -u albert-eyes-display.service
 
 ## Deployment
 
-From the development PC, `./deploy.sh` cross-compiles the release binary for ARM64, copies it to `~/.local/bin/albert-eyes` on Albert, and restarts the display service. The cross-linker is configured in `.cargo/config.toml`.
+From the development PC, the depoy recipe inside just cross-compiles the release binary for ARM64, copies it to `~/.local/bin/albert-eyes` on Albert, and restarts the display service. The cross-linker is configured in `.cargo/config.toml`.
+You will have to modify it for your uses.
 
 ```bash
-./deploy.sh
+just deploy
 ```
 
 ## Albert's moods
