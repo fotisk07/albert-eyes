@@ -9,8 +9,8 @@ const AL_DEVICE: &str = "/dev/disk/by-uuid/ba307f60-44e2-42d0-b7af-589753384ebd"
 const BERT_DEVICE: &str = "/dev/disk/by-uuid/f71b55fd-9bd2-427e-bc54-d1a00cc5d6ce";
 
 const XPS_TO_AL_REPO: &str = "/srv/storage/backups/fotis-xps";
-const XPS_TO_BERT_REPO: &str = "/srv/recovery/computer-backups/fotis-xps";
-const AL_TO_BERT_REPO: &str = "/srv/recovery/shared";
+const XPS_TO_BERT_REPO: &str = "/srv/recovery/fotis-xps";
+const AL_TO_BERT_REPO: &str = "/srv/recovery/albert";
 
 const DAILY_BACKUP_STALE_HOURS: u16 = 48;
 const WEEKDAY_BACKUP_STALE_HOURS: u16 = 96;

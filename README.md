@@ -41,20 +41,22 @@ The structure of the NAS is really simple:
 ```text
 /srv
 ├── storage/                         # AL is mounted here
-│   ├── shared/                      # Folder where I store my files.
-│   │   │                            # I access it through a Copyparty web server.
-│   │   ├── photos/
-│   │   └── other-files/
-│   │
-│   └── backups/
-│       └── my-pc/                   # Backups of my PC using Restic
+│   ├── 00_inbox/
+│   ├── archives/
+│   ├── library/
+│   ├── photos/
+│   ├── projects/
+│   ├── records/
+│   ├── private/                     # Not exposed through Copyparty
+│   └── backups/                     # Not exposed through Copyparty
+│       └── fotis-xps/               # Backups of my PC using Restic
 │
 └── recovery/                        # BERT is mounted here
-    ├── shared/                      # Backup of /srv/storage/shared using Restic
-    └── computer-backups/            # Secondary backup using Restic
+    ├── albert/                      # Restic backup of storage, excluding backups and trash
+    └── fotis-xps/                   # Secondary PC backup using Restic
 ```
 
-So my workflow is pretty basic. When I want to access the NAS I use my browser (thanks copyparty). I have configured systemd timers for my PC to back up to Al and to Bert, and a systemd on Albert (the Pi) to back up the shared folder to Bert.
+So my workflow is pretty basic. When I want to access the NAS I use my browser (thanks copyparty). I have configured systemd timers for my PC to back up to Al and to Bert, and a systemd on Albert (the Pi) to back up storage to Bert, excluding laptop backups and trash. Copyparty shares storage directly, with access blocked to private files, laptop backups, and trash.
 
 I also have an offsite, offline backup (important!). I intend to make a script that automatically backs it up when plugged and prompted.
 
