@@ -70,6 +70,11 @@ fn main() {
     thread::spawn(move || touch::listen(touch_sender));
 
     print!("\x1B[2J");
+    if mode == DisplayMode::Screen {
+        // Otherwise the console cursor blinks at the end of the card. The service's
+        // TTYReset=yes brings it back when Albert stops.
+        print!("\x1B[?25l");
+    }
     loop {
         if last_collection.elapsed() >= time::Duration::from_millis(STATUS_UPDATE_MSECS) {
             status = collect::collect_status();
